@@ -6,5 +6,5 @@ String getSSID();
 String getPass();
 bool isPairingRequested();
 void setPairingRequest(bool enable);
-String getUniqueDeviceID(); 
+String getUniqueDeviceID();
 #endif

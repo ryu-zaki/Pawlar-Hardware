@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief Pawlar Collar Master Controller
+ * @brief Pawlar Collar Organized Firmware
  */
 #include <Arduino.h>
 #include "config.h"
@@ -22,10 +22,12 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), isr, FALLING);
     
     initGPS();
+    
+    // Debug: Show ID
+    Serial.println("🆔 ID: " + getUniqueDeviceID());
+
     pairingMode = isPairingRequested();
     initBLE(pairingMode);
-    
-    Serial.println("🆔 ID: " + getUniqueDeviceID());
 
     if (!pairingMode) {
         String s = getSSID(); String p = getPass();
@@ -44,7 +46,12 @@ void loop() {
                 Serial.printf("📍 Lat: %.6f, Lng: %.6f\n", getLat(), getLng());
                 sendLocationData(getLat(), getLng(), getSatellites());
             }
-        } else if (!pairingMode) Serial.print(".");
+        } else if (!pairingMode) {
+             // Debug output to see signal strength
+             int visible = getSatellites();
+             Serial.print(".");
+             if(visible > 0) Serial.printf(" [Seen: %d] ", visible);
+        }
         lastLog = millis();
     }
 

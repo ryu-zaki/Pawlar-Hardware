@@ -25,7 +25,14 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLE(bool isPairing) {
-    BLEDevice::init(isPairing ? "Pawlar Collar Setup" : "Pawlar Collar");
+    String deviceName = getUniqueDeviceID();
+
+    if (isPairing) {
+        deviceName += " Setup"; 
+    }
+
+    BLEDevice::init(deviceName.c_str());
+
     BLEServer *pServer = BLEDevice::createServer();
     BLEService *pS = pServer->createService(SERVICE_UUID);
     
@@ -37,9 +44,11 @@ void initBLE(bool isPairing) {
         BLECharacteristic *pCreds = pS->createCharacteristic(CHAR_CREDENTIALS_UUID, BLECharacteristic::PROPERTY_WRITE);
         pCreds->setCallbacks(new PairingCallbacks());
         digitalWrite(LED_PIN, LOW);
-        Serial.println("🔵 PAIRING MODE");
+        Serial.print("🔵 PAIRING MODE: ");
+        Serial.println(deviceName);
     } else {
-        Serial.println("✅ BEACON MODE");
+        Serial.print("✅ BEACON MODE: ");
+        Serial.println(deviceName);
     }
     pS->start();
     BLEAdvertising *pAdv = BLEDevice::getAdvertising();
