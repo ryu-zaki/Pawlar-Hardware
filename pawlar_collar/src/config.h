@@ -22,7 +22,17 @@ static const char* BACKEND_URL = "https://your-backend.railway.app/api/telemetry
 #define LONG_PRESS_TIME  3000
 
 // --- BLE ---
-#define SERVICE_UUID           "4fafc201-1fb5-459e-8fcc-c5c9c331914b"
-#define CHAR_CREDENTIALS_UUID  "beb5483e-36e1-4688-b7f5-ea07361b26a8"
+#define SERVICE_UUID           "172f3570-5645-4290-9519-046c64d85147"
+#define CHAR_CREDENTIALS_UUID  "2388432a-360e-4363-8025-055171736417"
+
+// --- MQTT CONFIG (UPDATED) ---
+#define MQTT_SERVER      "192.168.0.106"
+#define MQTT_PORT        1883
+#define MQTT_USER        ""            
+#define MQTT_PASSWORD    ""             
+
+#define TOPIC_COMMANDS   "pawlar/collar/commands" 
+#define TOPIC_GPS        "pawlar/collar/gps" 
+#define TOPIC_STATUS     "collar/status"
 
 #endif
