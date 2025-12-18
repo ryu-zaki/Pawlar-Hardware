@@ -1,7 +1,6 @@
 #include "network_manager.h"
 #include "config.h"
 #include "storage_manager.h"
-
 #define BLYNK_PRINT Serial
 #include <WiFi.h>
 #include <BlynkSimpleEsp32.h>
@@ -22,40 +21,26 @@ void runCloud() { if(WiFi.status()==WL_CONNECTED) Blynk.run(); }
 void sendLocationData(float lat, float lng, int sats) {
     if (WiFi.status() != WL_CONNECTED) return;
 
-    // 1. Send to Blynk (Prototype Visualization)
+    // 1. Blynk
     if (Blynk.connected()) {
         Blynk.virtualWrite(V0, lat);
         Blynk.virtualWrite(V1, lng);
         Blynk.virtualWrite(V2, sats);
+        Serial.println("☁️ Sent to Blynk");
     }
 
-    // 2. Send to PRODUCTION BACKEND (The "Contract")
+    // 2. Backend
     HTTPClient http;
-    http.begin(BACKEND_URL); // URL defined in config.h
+    http.begin(BACKEND_URL);
     http.addHeader("Content-Type", "application/json");
-    
-    StaticJsonDocument<256> doc;
-    
-    // --- THIS IS THE PAYLOAD STRUCTURE FOR THE DATABASE ---
-    doc["device_id"]     = getUniqueDeviceID(); // String (VARCHAR)
-    doc["latitude"]      = lat;                 // Float  (DECIMAL)
-    doc["longitude"]     = lng;                 // Float  (DECIMAL)
-    doc["satellites"]    = sats;                // Int    (INTEGER)
-    doc["battery_level"] = 95;                  // Int    (SMALLINT) - Placeholder
-    doc["status"]        = "active";            // String (VARCHAR)
-    // ----------------------------------------------------
-    
-    String jsonBody;
-    serializeJson(doc, jsonBody);
-
-    int httpResponseCode = http.POST(jsonBody);
-    
-    if(httpResponseCode > 0) {
-        String response = http.getString();
-        Serial.println("🚀 Sent to Backend: " + response);
-    } else {
-        Serial.printf("❌ Backend Error: %s\n", http.errorToString(httpResponseCode).c_str());
-    }
-    
+    StaticJsonDocument<200> doc;
+    doc["device_id"] = getUniqueDeviceID();
+    doc["latitude"] = lat;
+    doc["longitude"] = lng;
+    doc["satellites"] = sats;
+    String json;
+    serializeJson(doc, json);
+    int code = http.POST(json);
+    // if(code > 0) Serial.printf("🚀 Sent to Backend: %d\n", code);
     http.end();
 }
