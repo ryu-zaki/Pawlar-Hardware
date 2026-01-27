@@ -1,5 +1,5 @@
-#include "ble_manager.h"
 #include "config.h"
+#include "ble_manager.h"
 #include "storage_manager.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>

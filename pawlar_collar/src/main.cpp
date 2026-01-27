@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief Pawlar Collar - HiveMQ Secure + 5% Battery Steps
+ * @brief Pawlar Collar - 10% Battery Steps + GPS + HiveMQ
  */
 #include <Arduino.h>
 #include <WiFi.h>
@@ -18,7 +18,6 @@
 WiFiClientSecure testWifiClient;
 PubSubClient client(testWifiClient);
 
-// --- CONFIGURATION ---
 const unsigned long SEND_INTERVAL = 2000; 
 
 // --- GLOBAL VARIABLES ---
@@ -28,7 +27,7 @@ unsigned long lastSend = 0;
 
 void IRAM_ATTR isr() { btnPressed = true; }
 
-// --- 🔋 BATTERY FUNCTION (5% Increments) ---
+// --- 🔋 BATTERY FUNCTION (10% Increments) ---
 int getBatteryPercentage() {
     long sum = 0;
     int samples = 50; 
@@ -38,19 +37,15 @@ int getBatteryPercentage() {
     }
     float averageAdc = sum / (float)samples;
     
-    // Convert ADC to Voltage
+    // Formula: (ADC / Max_ADC) * Ref_Voltage * Divider_Factor (2.0 for 100k+100k)
     float voltage = (averageAdc / 4095.0) * 3.3 * VOLTAGE_DIVIDER;
     
-    // Convert Voltage to Percentage (0-100)
+    // Mapping 3.3V (0%) to 4.2V (100%)
     int percentage = map(voltage * 100, MIN_BAT_V * 100, MAX_BAT_V * 100, 0, 100);
+    percentage = constrain(percentage, 0, 100);
 
-    // Safety Clamping
-    if (percentage > 100) percentage = 100;
-    if (percentage < 0) percentage = 0;
-
-    // ⚡ SNAP TO NEAREST 5% ⚡
-    // This removes jitter (e.g., 83% becomes 80%, 88% becomes 85%)
-    percentage = (percentage / 5) * 5; 
+    // ⚡ SNAP TO NEAREST 10% ⚡
+    percentage = (percentage / 10) * 10; 
 
     return percentage;
 }
@@ -59,22 +54,20 @@ int getBatteryPercentage() {
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     String message = "";
     for (int i = 0; i < length; i++) message += (char)payload[i];
+    message.trim(); // Removes hidden spaces
+    
     String topicStr = String(topic);
     Serial.println("\n📬 Msg: [" + topicStr + "] " + message);
 
-    if (topicStr == TOPIC_BATTERY_SUB) {
+    // Using the shared topic defined in your config.h
+    if (topicStr == TOPIC_BATTERY_SHARED) {
         if (message == "GET_BATTERY" || message == "REFRESH") {
             Serial.println("🔋 Request Received! Reading Battery...");
             
-            // Get the new stepped value (e.g., 80, 85, 90)
             int batLevel = getBatteryPercentage();
+            String batPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"bat\": " + String(batLevel) + "}";
             
-            String batPayload = "{";
-            batPayload += "\"id\": \"" + getUniqueDeviceID() + "\","; 
-            batPayload += "\"bat\": " + String(batLevel); 
-            batPayload += "}";
-            
-            client.publish(TOPIC_BATTERY_PUB, batPayload.c_str());
+            client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
             Serial.println("📤 Sent Response: " + batPayload);
         }
     }
@@ -84,17 +77,17 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
 void mqtt_reconnect() {
     if (WiFi.status() == WL_CONNECTED && !client.connected()) {
         String clientId = "PawlarCollar-" + getUniqueDeviceID();
-        
         Serial.print("Connecting to HiveMQ...");
         
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
             Serial.println("✅ CONNECTED!");
-            client.subscribe(TOPIC_BATTERY_SUB); 
-            Serial.println("👂 Subscribed to: " + String(TOPIC_BATTERY_SUB));
+            // Subscribe to the shared battery topic
+            client.subscribe(TOPIC_BATTERY_SHARED); 
+            client.subscribe(TOPIC_COMMANDS);
+            Serial.println("👂 Subscribed to: " + String(TOPIC_BATTERY_SHARED));
         } else {
             Serial.print("❌ Failed, rc=");
             Serial.print(client.state()); 
-            Serial.println(" retrying in 5s...");
             delay(5000);
         }
     }
@@ -102,6 +95,7 @@ void mqtt_reconnect() {
 
 void setup() {
     Serial.begin(115200);
+    delay(2000);
     Serial.println("\n🚀 Pawlar System Starting...");
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -123,7 +117,6 @@ void setup() {
         if (s != "") connectToCloud(s, p);
     }
 
-    // HiveMQ SSL Security
     testWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqtt_callback);
@@ -136,22 +129,11 @@ void loop() {
         if (!client.connected()) mqtt_reconnect();
         client.loop(); 
 
-        // GPS Sender
         if (millis() - lastSend > SEND_INTERVAL) {
-            
             double lat = getLat();
             double lng = getLng();
 
-            // Just for debugging GPS signal
-            if (lat == 0.0 && lng == 0.0) {
-                 // Serial.println("Searching for Satellites...");
-            }
-
-            String gpsPayload = "{";
-            gpsPayload += "\"id\": \"" + getUniqueDeviceID() + "\","; 
-            gpsPayload += "\"lat\": " + String(lat, 6) + ",";
-            gpsPayload += "\"lng\": " + String(lng, 6);
-            gpsPayload += "}";
+            String gpsPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"lat\": " + String(lat, 6) + ", \"lng\": " + String(lng, 6) + ", \"sats\": " + String(getSatellites()) + "}";
 
             if (client.connected()) {
                 client.publish(TOPIC_GPS_PUB, gpsPayload.c_str());
@@ -161,7 +143,6 @@ void loop() {
         }
     }
 
-    // Button Logic
     if (btnPressed) {
         delay(50);
         if (digitalRead(BUTTON_PIN) == LOW) {
@@ -180,5 +161,6 @@ void loop() {
             }
         }
         btnPressed = false;
+        digitalWrite(LED_PIN, HIGH);
     }
 }

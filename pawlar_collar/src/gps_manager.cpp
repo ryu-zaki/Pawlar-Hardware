@@ -5,8 +5,15 @@ TinyGPSPlus gps;
 HardwareSerial gpsSerial(1);
 
 void initGPS() { gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN); }
-void readGPS() { while (gpsSerial.available() > 0) gps.encode(gpsSerial.read()); }
+void readGPS() { 
+    while (gpsSerial.available() > 0) {
+        char c = gpsSerial.read();
+        Serial.print(c);
+        gps.encode(c); 
+    }
+}
 bool hasFix() { return gps.location.isValid(); }
 float getLat() { return gps.location.lat(); }
 float getLng() { return gps.location.lng(); }
+int getSatellites() { return gps.satellites.value(); }
 int getSatellites() { return gps.satellites.value(); }
