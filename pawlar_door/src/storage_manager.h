@@ -2,11 +2,17 @@
 #define STORAGE_MANAGER_H
 #include <Arduino.h>
 
-void initStorage(); // Add this!
+void initStorage();
 void saveCredentials(String ssid, String pass);
-void saveAuthorizedCollar(String collarID);
 String getSSID();
 String getPass();
-String getAuthorizedCollar();
+
+void saveDeviceInfo(String deviceId, String userId);
+String getDeviceId();
+String getUserId();
+String getUniqueDoorID();
+
+void saveAuthorizedCollar(String collarList);
+String getAuthorizedCollarList();
 
 #endif

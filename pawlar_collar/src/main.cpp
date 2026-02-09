@@ -1,6 +1,6 @@
 /**
  * @file main.cpp
- * @brief Pawlar Collar - 10% Battery Steps + GPS + HiveMQ
+ * @brief Pawlar Collar - WiFi Stable Mode (Cellular Logic Commented Out)
  */
 #include <Arduino.h>
 #include <WiFi.h>
@@ -14,6 +14,12 @@
 #include "gps_manager.h"
 #include "network_manager.h"
 #include "ble_manager.h"
+#include "cellular_manager.h"
+#include <SoftwareSerial.h>
+
+// The Serial handle for the A7670C (Keep for Serial Bridge)
+extern SoftwareSerial swSerial;
+#define CELL_PORT swSerial
 
 WiFiClientSecure testWifiClient;
 PubSubClient client(testWifiClient);
@@ -36,17 +42,10 @@ int getBatteryPercentage() {
         delay(2);
     }
     float averageAdc = sum / (float)samples;
-    
-    // Formula: (ADC / Max_ADC) * Ref_Voltage * Divider_Factor (2.0 for 100k+100k)
     float voltage = (averageAdc / 4095.0) * 3.3 * VOLTAGE_DIVIDER;
-    
-    // Mapping 3.3V (0%) to 4.2V (100%)
     int percentage = map(voltage * 100, MIN_BAT_V * 100, MAX_BAT_V * 100, 0, 100);
     percentage = constrain(percentage, 0, 100);
-
-    // ⚡ SNAP TO NEAREST 10% ⚡
     percentage = (percentage / 10) * 10; 
-
     return percentage;
 }
 
@@ -54,21 +53,16 @@ int getBatteryPercentage() {
 void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     String message = "";
     for (int i = 0; i < length; i++) message += (char)payload[i];
-    message.trim(); // Removes hidden spaces
+    message.trim(); 
     
     String topicStr = String(topic);
     Serial.println("\n📬 Msg: [" + topicStr + "] " + message);
 
-    // Using the shared topic defined in your config.h
     if (topicStr == TOPIC_BATTERY_SHARED) {
         if (message == "GET_BATTERY" || message == "REFRESH") {
-            Serial.println("🔋 Request Received! Reading Battery...");
-            
             int batLevel = getBatteryPercentage();
             String batPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"bat\": " + String(batLevel) + "}";
-            
             client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
-            Serial.println("📤 Sent Response: " + batPayload);
         }
     }
 }
@@ -78,16 +72,13 @@ void mqtt_reconnect() {
     if (WiFi.status() == WL_CONNECTED && !client.connected()) {
         String clientId = "PawlarCollar-" + getUniqueDeviceID();
         Serial.print("Connecting to HiveMQ...");
-        
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
             Serial.println("✅ CONNECTED!");
-            // Subscribe to the shared battery topic
             client.subscribe(TOPIC_BATTERY_SHARED); 
             client.subscribe(TOPIC_COMMANDS);
-            Serial.println("👂 Subscribed to: " + String(TOPIC_BATTERY_SHARED));
         } else {
             Serial.print("❌ Failed, rc=");
-            Serial.print(client.state()); 
+            Serial.println(client.state()); 
             delay(5000);
         }
     }
@@ -95,72 +86,116 @@ void mqtt_reconnect() {
 
 void setup() {
     Serial.begin(115200);
-    delay(2000);
+    delay(1000);
+    initStorage();
     Serial.println("\n🚀 Pawlar System Starting...");
 
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
-    pinMode(LED_PIN, OUTPUT); digitalWrite(LED_PIN, HIGH);
-    
-    analogSetAttenuation(ADC_11db); 
-    pinMode(BATTERY_PIN, INPUT);
+    // 1. READ THE SAVED STATE FROM STORAGE 🚩
+    pairingMode = isPairingRequested(); // <--- ADD THIS LINE
 
+    // 🔘 CONFIGURE BUTTON & INTERRUPT
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), isr, FALLING);
 
+    pinMode(LED_PIN, OUTPUT); 
+    digitalWrite(LED_PIN, HIGH);
+
+    // 2. Start BLE with the CORRECT mode
+    initBLE(pairingMode); 
+
     initGPS();
-    Serial.println("🆔 ID: " + getUniqueDeviceID());
+    initCellular(); 
 
-    pairingMode = isPairingRequested();
-    initBLE(pairingMode);
-
-    if (!pairingMode) {
-        String s = getSSID(); String p = getPass();
-        if (s != "") connectToCloud(s, p);
-    }
-
+    // 3. Network Config
     testWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqtt_callback);
+
+    // If pairingMode is false, it means we are in BEACON mode
+    if (!pairingMode) {
+        String s = getSSID(); String p = getPass();
+        if (s != "") connectToCloud(s, p); 
+    }
 }
 
 void loop() {
+    // 1. ⌨️ SERIAL BRIDGE (Modified for SoftwareSerial)
+    while (Serial.available()) {
+        CELL_PORT.write(Serial.read());
+    }
+    while (CELL_PORT.available()) {
+        Serial.write(CELL_PORT.read());
+    }
+
+    // 2. 🛰️ GPS & NETWORK LOGIC
     readGPS(); 
 
-    if (!pairingMode && WiFi.status() == WL_CONNECTED) {
+    bool isWiFiAvailable = (WiFi.status() == WL_CONNECTED);
+
+    if (isWiFiAvailable && !pairingMode) {
         if (!client.connected()) mqtt_reconnect();
         client.loop(); 
 
         if (millis() - lastSend > SEND_INTERVAL) {
-            double lat = getLat();
-            double lng = getLng();
-
-            String gpsPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"lat\": " + String(lat, 6) + ", \"lng\": " + String(lng, 6) + ", \"sats\": " + String(getSatellites()) + "}";
-
-            if (client.connected()) {
+            int bat = getBatteryPercentage();
+            if (hasFix()) {
+                String gpsPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"lat\": " + String(getLat(), 6) + ", \"lng\": " + String(getLng(), 6) + ", \"sats\": " + String(getSatellites()) + ", \"status\": \"LOCKED\"}";
                 client.publish(TOPIC_GPS_PUB, gpsPayload.c_str());
-                Serial.println("📤 Sent GPS: " + gpsPayload);
+                Serial.println("📤 Sent GPS (WiFi): " + gpsPayload);
+            } else {
+                String scanPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"status\": \"SCANNING\", \"sats\": " + String(getSatellites()) + "}";
+                client.publish(TOPIC_GPS_PUB, scanPayload.c_str());
+                Serial.println("🛰️ GPS Scanning");
             }
             lastSend = millis();
         }
     }
+    else if (!pairingMode && !isWiFiAvailable) {
+        // FAILOVER LOGIC
+        static unsigned long lastCellUpdate = 0;
+        if (millis() - lastCellUpdate > 60000) { 
+            lastCellUpdate = millis();
+            Serial.println("📶 WiFi Lost. Attempting 4G Failover...");
+            sendCellularMQTT(getLat(), getLng(), getBatteryPercentage());
+        }
+    }
 
+    // 3. 🔘 BUTTON LOGIC
     if (btnPressed) {
-        delay(50);
+        delay(50); // Simple debounce
         if (digitalRead(BUTTON_PIN) == LOW) {
             unsigned long start = millis();
             bool handled = false;
+
+            Serial.println("🔘 Button Hold Detected...");
+
             while (digitalRead(BUTTON_PIN) == LOW) {
-                digitalWrite(LED_PIN, !digitalRead(LED_PIN)); delay(100);
-                if (millis() - start > 10000) {
+                digitalWrite(LED_PIN, !digitalRead(LED_PIN)); 
+                delay(100); 
+                yield(); // Prevents Watchdog reset
+
+                unsigned long holdTime = millis() - start;
+
+                if (holdTime > 10000) {
+                    Serial.println("♻️ 10s Hold: Wiping WiFi & Restarting...");
                     WiFi.disconnect(true, true); 
-                    digitalWrite(LED_PIN, LOW); delay(2000); 
-                    ESP.restart(); handled = true; break; 
+                    digitalWrite(LED_PIN, LOW); 
+                    delay(1000); 
+                    ESP.restart(); 
+                    handled = true; 
+                    break; 
                 }
             }
-            if (!handled && (millis() - start > LONG_PRESS_TIME)) {
-                setPairingRequest(!pairingMode); delay(500); ESP.restart();
+
+            unsigned long finalHold = millis() - start;
+            if (!handled && (finalHold > LONG_PRESS_TIME)) {
+                Serial.println("🔵 3s Hold: Toggling Pairing Mode...");
+                setPairingRequest(!pairingMode); 
+                delay(500); 
+                ESP.restart();
             }
         }
         btnPressed = false;
-        digitalWrite(LED_PIN, HIGH);
+        digitalWrite(LED_PIN, HIGH); 
     }
 }

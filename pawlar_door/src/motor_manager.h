@@ -1,7 +1,8 @@
-#ifndef NETWORK_MANAGER_H
-#define NETWORK_MANAGER_H
-#include <Arduino.h>
+#ifndef MOTOR_MANAGER_H
+#define MOTOR_MANAGER_H
 
-void initNetwork();
-void logTriggerEvent(int rssi, double distance);
+void moveUp();
+void moveDown();
+void stopMotors();
+
 #endif

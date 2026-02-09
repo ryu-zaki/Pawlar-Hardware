@@ -1,5 +1,6 @@
 #include "storage_manager.h"
 #include <Preferences.h>
+#include <nvs_flash.h>
 Preferences preferences;
 
 void saveWiFiCreds(String ssid, String pass) {
@@ -37,4 +38,17 @@ String getUniqueDeviceID() {
     char idString[20];
     snprintf(idString, 20, "COLLAR_%08X", low);
     return String(idString);
+}
+void initStorage() {
+    // Initialize NVS
+    esp_err_t err = nvs_flash_init();
+    
+    // If NVS is full or has a new version, erase it and re-init
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+    
+    Serial.println("✅ NVS Storage Initialized");
 }
