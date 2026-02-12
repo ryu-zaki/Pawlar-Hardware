@@ -8,52 +8,33 @@
 #include "safety_manager.h"
 
 // --- Global State ---
-bool isMoving = false;  
-extern bool doorIsOpen;
+bool isMoving = false;
 TaskHandle_t BLETask; // Handle for the background task on Core 0
-
-// --- Button Pins ---
-#define BTN_UP 18
-#define BTN_DOWN 19
-
-// --- Motor Pins ---
-#define MOT_A_IN1 26
-#define MOT_A_IN2 25
-#define MOT_A_ENA 32
-#define MOT_B_IN3 33
-#define MOT_B_IN4 27
-#define MOT_B_ENB 14
 
 // --- Function Prototypes ---
 void stopMotors();
 void moveUp();
 void moveDown();
-void handleManualActivityLog(String event); 
+void handleManualActivityLog(String event);
 
 // --- Core 0 Task: Bluetooth Scanning ---
 // This function runs independently on the second processor core.
 void BLELoop(void * pvParameters) {
     Serial.print("🔵 BLE Task started on Core: ");
-    Serial.println(xPortGetCoreID()); 
-    
+    Serial.println(xPortGetCoreID());
+
     initProximityScan();
 
-    for(;;) { 
-        // 1. Only perform auto-scan if a human isn't manually moving the door
-        if (!isMoving) {
-            scanForCollar();
-        }
-        
-        // 2. CHANGE: Reduce delay from 2000ms to 500ms for better response time
-        // This ensures we don't miss the collar's advertising window.
-        vTaskDelay(500 / portTICK_PERIOD_MS); 
+    for(;;) {
+        scanForCollar();
+        vTaskDelay(500 / portTICK_PERIOD_MS);
     }
 }
 
 // --- Manual Activity Logging ---
 void handleManualActivityLog(String event) {
     static unsigned long lastPub = 0;
-    if (client.connected() && (millis() - lastPub > 2000)) { 
+    if (client.connected() && (millis() - lastPub > 2000)) {
         publishDoorActivity(event, 0.0);
         lastPub = millis();
     }
@@ -66,7 +47,7 @@ void stopMotors() {
 }
 
 void moveUp() {
-    Serial.println("⬆️ Logic: Moving Up..."); 
+    Serial.println("⬆️ Logic: Moving Up...");
     digitalWrite(MOT_A_IN1, HIGH); digitalWrite(MOT_A_IN2, LOW);
     digitalWrite(MOT_B_IN3, HIGH); digitalWrite(MOT_B_IN4, LOW);
     analogWrite(MOT_A_ENA, 255);
@@ -83,7 +64,7 @@ void moveDown() {
         return;
     }
 
-    Serial.println("⬇️ Logic: Moving Down..."); 
+    Serial.println("⬇️ Logic: Moving Down...");
     digitalWrite(MOT_A_IN1, LOW); digitalWrite(MOT_A_IN2, HIGH);
     digitalWrite(MOT_B_IN3, LOW); digitalWrite(MOT_B_IN4, HIGH);
     analogWrite(MOT_A_ENA, 255);
@@ -93,7 +74,7 @@ void moveDown() {
 void setup() {
     Serial.begin(115200);
     Serial.println("--- Pawlar Door: DUAL-CORE STABILITY MODE ---");
-    
+
     // Initialize Pins
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
@@ -102,7 +83,7 @@ void setup() {
 
     // Initialize Managers
     initStorage();
-    initBatteryMonitor(); 
+    initBatteryMonitor();
     initSafetySensors();
 
     String ssid = getSSID();
@@ -145,22 +126,22 @@ void loop() {
         if (btnUp) {
             moveUp();
             handleManualActivityLog("MANUAL_UP");
-        } 
+        }
         else if (btnDown) {
             moveDown();
             handleManualActivityLog("MANUAL_DOWN");
         }
-        return; 
-    } 
+        return;
+    }
 
     // 2. Idle Logic
-    // If NO buttons are pressed AND we are NOT in an automated cycle (doorIsOpen is false)
-    // but the system still thinks we are moving, then we stop.
-    if (!doorIsOpen && !btnUp && !btnDown) { 
-        if (isMoving) { 
-            Serial.println("🛑 System Idle: Stopping Motors.");
-            stopMotors(); 
-            isMoving = false; 
+    // If NO buttons are pressed, and the system thinks it's moving, stop it.
+    // The automated control is handled on Core 0. This is a manual override stop.
+    if (!btnUp && !btnDown) {
+        if (isMoving) {
+            Serial.println("🛑 Manual Override: Stopping Motors.");
+            stopMotors();
+            isMoving = false;
         }
     }
 }

@@ -2,10 +2,12 @@
 #include "network_manager.h"
 #include "config.h"
 
+bool petHasPassed = false; // ADDED: Definition for the global flag
+
 enum PetPath { IDLE, START_IN, START_OUT };
 PetPath currentPath = IDLE;
 unsigned long pathTimer = 0;
-bool bothSensorsBlocked = false; // 🛡️ New: Confirms pet is physically "in the middle"
+bool bothSensorsBlocked = false; 
 bool isPathClear = true;
 
 const int VERIFICATION_DELAY = 150;
@@ -53,16 +55,15 @@ void checkIRActivity() {
             break;
 
         case START_IN:
-            // 1. Confirm pet is currently spanning BOTH sensors
             if (outsideBlocked && insideBlocked) {
                 bothSensorsBlocked = true;
                 pathTimer = millis();
             }
-            // 2. Only trigger success if they were spanning both and now both are clear
             if (!insideBlocked && !outsideBlocked) {
                 if (bothSensorsBlocked) {
                     Serial.println("✅ SUCCESS: PET FULLY ENTERED");
                     publishDoorActivity("PET_GOING_IN", 0.0);
+                    petHasPassed = true; // Signal that the pet has passed
                 }
                 currentPath = IDLE;
                 bothSensorsBlocked = false;
@@ -70,16 +71,15 @@ void checkIRActivity() {
             break;
 
         case START_OUT:
-            // 1. Confirm pet is currently spanning BOTH sensors
             if (insideBlocked && outsideBlocked) {
                 bothSensorsBlocked = true;
                 pathTimer = millis();
             }
-            // 2. Trigger success only after full transition
             if (!insideBlocked && !outsideBlocked) {
                 if (bothSensorsBlocked) {
                     Serial.println("✅ SUCCESS: PET FULLY EXITED");
                     publishDoorActivity("PET_GOING_OUT", 0.0);
+                    petHasPassed = true; // Signal that the pet has passed
                 }
                 currentPath = IDLE;
                 bothSensorsBlocked = false;
