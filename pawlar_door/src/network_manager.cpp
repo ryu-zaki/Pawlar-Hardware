@@ -53,6 +53,8 @@ bool connectToWiFi(String ssid, String pass) {
 void requestCollarSync() {
     if (WiFi.status() == WL_CONNECTED) {
         HTTPClient http;
+        
+        // 1. Ensure this IP matches your computer running the backend
         String serverPath = "http://192.168.0.110:3001/doors/all-collars"; 
         
         http.begin(serverPath);
@@ -65,21 +67,47 @@ void requestCollarSync() {
         
         if (httpResponseCode == 200) {
             String response = http.getString();
+            Serial.println("📥 Payload: " + response); // Debug print to see what backend sent
+
             JsonDocument doc; 
             DeserializationError error = deserializeJson(doc, response);
 
             if (!error) {
-                JsonArray collars = doc["collars"];
-                String collarList = "";
-                for (JsonObject collar : collars) {
-                    String petId = collar["pet_id"].as<String>();
-                    if (collarList != "") collarList += "|";
-                    collarList += petId;
+                // 🔄 CHANGE 1: Handle Root Array
+                // Prisma returns [ {data}, {data} ], NOT { "collars": [...] }
+                if (doc.is<JsonArray>()) {
+                    JsonArray collars = doc.as<JsonArray>();
+                    String collarList = "";
+
+                    for (JsonObject collar : collars) {
+                        // 🔄 CHANGE 2: Check for 'device_id' (Standard) or 'pet_id'
+                        // Matches the "COLLAR_XXXX" format from your Collar Code
+                        String fetchedId = "";
+                        
+                        if (collar.containsKey("device_id")) {
+                            fetchedId = collar["device_id"].as<String>();
+                        } else if (collar.containsKey("pet_id")) {
+                            fetchedId = collar["pet_id"].as<String>();
+                        }
+
+                        if (fetchedId.length() > 0) {
+                            if (collarList != "") collarList += "|";
+                            collarList += fetchedId;
+                        }
+                    }
+
+                    if (collarList != "") {
+                        saveAuthorizedCollar(collarList);
+                        Serial.println("💾 DB Sync Success: " + collarList);
+                    } else {
+                        Serial.println("⚠️ Connected, but user has no collars.");
+                    }
+                } else {
+                    Serial.println("❌ Error: Backend did not return an Array []");
                 }
-                if (collarList != "") {
-                    saveAuthorizedCollar(collarList);
-                    Serial.println("💾 DB Sync Success: " + collarList);
-                }
+            } else {
+                Serial.print("❌ JSON Error: ");
+                Serial.println(error.c_str());
             }
         } else {
             Serial.println("❌ DB Sync Failed. Code: " + String(httpResponseCode));

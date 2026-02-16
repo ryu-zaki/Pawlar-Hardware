@@ -15,16 +15,18 @@ void moveDown();
 void stopMotors();
 
 // --- CONFIG ---
-const int RSSI_THRESHOLD_OPEN = -65;
-const int RSSI_THRESHOLD_CLOSE = -75; // More forgiving threshold for closing
+const int RSSI_THRESHOLD_OPEN = -75;
+const int RSSI_THRESHOLD_CLOSE = -90; // More forgiving threshold for closing
 const unsigned long TRAVEL_TIME = 10000; // 10 seconds
 const unsigned long COLLAR_TIMEOUT = 2000; // 2 seconds
+const unsigned long WAITING_TIMEOUT = 5000; // 5 seconds for door to wait before closing
 
 // --- STATE MACHINE ---
 enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
 DoorState currentDoorState = DOOR_IDLE;
 
 unsigned long doorCycleStartTime = 0;
+unsigned long waitingStartTime = 0; // Added: To track when the door entered WAITING state
 int lastSeenRssi = -100;
 unsigned long lastSeenCollarTime = 0;
 
@@ -77,6 +79,7 @@ void scanForCollar() {
                 Serial.println("🛑 Door has reached the top. Now waiting.");
                 stopMotors();
                 currentDoorState = DOOR_WAITING;
+                waitingStartTime = millis(); // Set waiting start time
             }
             break;
 
@@ -93,6 +96,12 @@ void scanForCollar() {
                 currentDoorState = DOOR_CLOSING;
                 doorCycleStartTime = millis(); // Reset timer for closing
             }
+            // Condition 3: Waiting time elapsed
+            else if (millis() - waitingStartTime >= WAITING_TIMEOUT) {
+                Serial.println("⏳ Waiting time elapsed. Starting close sequence.");
+                currentDoorState = DOOR_CLOSING;
+                doorCycleStartTime = millis(); // Reset timer for closing
+            }
             break;
 
         case DOOR_CLOSING:
@@ -103,6 +112,7 @@ void scanForCollar() {
                 Serial.println("⚠️ OBSTACLE! Pausing close.");
                 // To prevent it from immediately trying to close again, we can go back to waiting
                 currentDoorState = DOOR_WAITING;
+                waitingStartTime = millis(); // Reset waiting start time when returning to WAITING due to obstacle
                 return;
             }
 

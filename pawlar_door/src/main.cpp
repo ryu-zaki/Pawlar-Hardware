@@ -27,7 +27,7 @@ void BLELoop(void * pvParameters) {
 
     for(;;) {
         scanForCollar();
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        vTaskDelay(0);
     }
 }
 
