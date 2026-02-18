@@ -44,9 +44,16 @@ String getUserId() {
 }
 
 String getDeviceId() {
-    prefs.begin("pawlar", true);
-    String id = prefs.getString("device_id", "DOOR_DEFAULT_ID"); // Give it a default
+    prefs.begin("pawlar", true); // Read-only mode
+    String id = "";
+    if (prefs.isKey("device_id")) {
+        id = prefs.getString("device_id");
+    }
+    
     prefs.end();
+    if (id == "") {
+        return getUniqueDoorID();
+    }
     return id;
 }
 
@@ -67,7 +74,13 @@ void saveAuthorizedCollar(String collarList) {
 
 String getAuthorizedCollarList() {
     prefs.begin("pawlar", true);
-    String list = prefs.getString("collar_list", ""); 
+    String list = "";
+    
+    // 🚩 FIX: Check if the key exists before trying to read it!
+    if (prefs.isKey("collar_list")) {
+        list = prefs.getString("collar_list", ""); 
+    }
+    
     prefs.end();
     return list; 
 }

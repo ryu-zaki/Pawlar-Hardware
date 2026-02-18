@@ -2,6 +2,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <ArduinoJson.h> // 🚩 Added ArduinoJson to parse the app's payload
 #include "ble_manager.h"
 #include "storage_manager.h" 
 #include "config.h"
@@ -13,21 +14,32 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
             String input = String(value.c_str());
             Serial.println("📥 WiFi Credentials received: " + input);
 
-            // App sends: ssid|password
-            int splitIndex = input.indexOf('|');
+            // 🚩 1. Parse the incoming JSON from the app
+            JsonDocument doc; 
+            DeserializationError error = deserializeJson(doc, input);
 
-            if (splitIndex != -1) {
-                String ssid = input.substring(0, splitIndex);
-                String pass = input.substring(splitIndex + 1);
+            // 🚩 2. Check if parsing was successful
+            if (!error) {
+                const char* s = doc["ssid"]; 
+                const char* p = doc["password"];
 
-                // Save to NVS
-                saveCredentials(ssid, pass); 
+                // 🚩 3. Verify both keys exist
+                if (s && p) {
+                    String ssid = String(s);
+                    String pass = String(p);
 
-                Serial.println("✅ WiFi Saved. Rebooting to establish cloud connection...");
-                delay(2000);
-                ESP.restart(); 
+                    // Save to NVS
+                    saveCredentials(ssid, pass); 
+
+                    Serial.println("✅ WiFi Saved. Rebooting to establish cloud connection...");
+                    delay(2000);
+                    ESP.restart(); 
+                } else {
+                    Serial.println("❌ Error: JSON missing 'ssid' or 'password' keys.");
+                }
             } else {
-                Serial.println("❌ Error: Invalid format received. Expected 'ssid|password'.");
+                Serial.print("❌ Error: Invalid JSON format. Reason: ");
+                Serial.println(error.c_str());
             }
         }
     }
@@ -42,9 +54,10 @@ void initBLEProvisioning() {
     BLEService *pService = pServer->createService(SERVICE_UUID);
 
     BLECharacteristic *pCharacteristic = pService->createCharacteristic(
-                                         CHARACTERISTIC_UUID,
-                                         BLECharacteristic::PROPERTY_WRITE
-                                       );
+                                             CHAR_CREDENTIALS_UUID,
+                                             BLECharacteristic::PROPERTY_WRITE | 
+                                             BLECharacteristic::PROPERTY_WRITE_NR
+                                           );
 
     pCharacteristic->setCallbacks(new ProvisioningCallbacks());
     pService->start(); 

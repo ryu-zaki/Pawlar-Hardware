@@ -11,6 +11,4 @@ void initNetwork();
 void logTriggerEvent(int rssi, double distance);
 void publishDoorActivity(String event, double distance);
 void publishBatteryHealth(float voltage, float current, int percentage);
-void requestCollarSync();
-
 #endif

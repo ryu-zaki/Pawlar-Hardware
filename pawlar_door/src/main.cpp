@@ -6,10 +6,12 @@
 #include "ble_manager.h"
 #include "battery_manager.h" 
 #include "safety_manager.h"
+#include <esp_task_wdt.h>
 
 // --- Global State ---
 bool isMoving = false;
 TaskHandle_t BLETask; // Handle for the background task on Core 0
+String authorizedCollarsCache = "";
 
 // --- Function Prototypes ---
 void stopMotors();
@@ -18,16 +20,24 @@ void moveDown();
 void handleManualActivityLog(String event);
 
 // --- Core 0 Task: Bluetooth Scanning ---
-// This function runs independently on the second processor core.
 void BLELoop(void * pvParameters) {
     Serial.print("🔵 BLE Task started on Core: ");
     Serial.println(xPortGetCoreID());
 
+    // 🚩 1. Register this task with the Watchdog so it doesn't get killed
+    esp_task_wdt_add(NULL);
+
     initProximityScan();
 
     for(;;) {
+        // 🚩 2. Feed the dog! (Reset the timer so it doesn't crash)
+        esp_task_wdt_reset();
+
         scanForCollar();
-        vTaskDelay(0);
+        
+        // 🚩 3. Increase delay to let the CPU breathe
+        // 50ms is plenty fast for a door, but prevents crashes
+        vTaskDelay(50 / portTICK_PERIOD_MS); 
     }
 }
 
@@ -89,6 +99,9 @@ void setup() {
     String ssid = getSSID();
     String pass = getPass();
 
+    authorizedCollarsCache = getAuthorizedCollarList(); 
+    Serial.println("📋 Loaded Authorized Collars: " + authorizedCollarsCache);
+        
     if (ssid == "") {
         initBLEProvisioning();
     } else {
