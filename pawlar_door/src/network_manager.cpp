@@ -20,7 +20,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     
     Serial.println("📩 MQTT Message [" + topicStr + "]: " + message);
 
-    String myLinkedCollarsTopic = "pawlar/door/linkedcollars/" + getDeviceId();
+    String myLinkedCollarsTopic = "pawlar/door/linked-collars/" + getDeviceId();
 
     if (topicStr == myLinkedCollarsTopic) {
         JsonDocument doc; 
@@ -83,7 +83,7 @@ void initNetwork() {
     
     String doorIdentity = getDeviceId(); 
     String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
-    String linkedCollarsTopic = "pawlar/door/linkedcollars/" + doorIdentity;
+    String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;
     String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": false}";
 
     Serial.println("☁️ Connecting to HiveMQ...");
