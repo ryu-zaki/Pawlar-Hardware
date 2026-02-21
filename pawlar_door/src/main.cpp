@@ -91,6 +91,17 @@ void setup() {
     pinMode(MOT_A_IN1, OUTPUT); pinMode(MOT_A_IN2, OUTPUT); pinMode(MOT_A_ENA, OUTPUT);
     pinMode(MOT_B_IN3, OUTPUT); pinMode(MOT_B_IN4, OUTPUT); pinMode(MOT_B_ENB, OUTPUT);
 
+    // 🚩 FACTORY RESET CHECK: Hold UP + DOWN buttons for 3 seconds at boot
+    if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
+        Serial.println("⚠️ RESET DETECTED: Hold buttons for 3s to clear NVS...");
+        delay(3000); 
+        if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
+            clearStorage(); // Will erase NVS and reboot
+        } else {
+            Serial.println("❌ Reset aborted.");
+        }
+    }
+
     // Initialize Managers
     initStorage();
     initBatteryMonitor();
@@ -119,6 +130,9 @@ void setup() {
                 &BLETask,       /* Task handle */
                 0               /* Core ID (0) */
             );
+        } else {
+            Serial.println("❌ Saved WiFi failed to connect. Falling back to BLE Setup...");
+            initBLEProvisioning();
         }
     }
     Serial.println("🚀 System Online. Core 1 handling Buttons/Motors.");

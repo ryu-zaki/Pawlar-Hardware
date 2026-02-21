@@ -4,6 +4,7 @@
 
 void initStorage();
 void saveCredentials(String ssid, String pass);
+void clearStorage();
 String getSSID();
 String getPass();
 

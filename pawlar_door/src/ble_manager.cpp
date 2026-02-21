@@ -5,6 +5,7 @@
 #include <ArduinoJson.h> // 🚩 Added ArduinoJson to parse the app's payload
 #include "ble_manager.h"
 #include "storage_manager.h" 
+#include "network_manager.h"
 #include "config.h"
 
 class ProvisioningCallbacks: public BLECharacteristicCallbacks {
@@ -28,12 +29,17 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
                     String ssid = String(s);
                     String pass = String(p);
 
-                    // Save to NVS
-                    saveCredentials(ssid, pass); 
-
-                    Serial.println("✅ WiFi Saved. Rebooting to establish cloud connection...");
-                    delay(2000);
-                    ESP.restart(); 
+                    Serial.println("🔄 Testing WiFi Connection before saving...");
+                    if (connectToWiFi(ssid, pass)) {
+                        // Save to NVS ONLY IF successful
+                        saveCredentials(ssid, pass); 
+                        Serial.println("✅ WiFi Verified & Saved. Rebooting to establish cloud connection...");
+                        delay(2000);
+                        ESP.restart(); 
+                    } else {
+                        Serial.println("❌ WiFi Connection Failed. Credentials NOT saved.");
+                        Serial.println("📢 Please check your SSID/Password and try again via the app.");
+                    }
                 } else {
                     Serial.println("❌ Error: JSON missing 'ssid' or 'password' keys.");
                 }

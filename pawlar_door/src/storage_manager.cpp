@@ -58,11 +58,14 @@ String getDeviceId() {
 }
 
 String getUniqueDoorID() {
-    uint64_t chipid = ESP.getEfuseMac(); 
-    uint32_t low = (uint32_t)chipid;
-    char idString[20];
-    snprintf(idString, 20, "DOOR_%08X", low);
-    return String(idString);
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X", 
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+             
+    return String(macStr);
 }
 
 // --- 🔒 AUTHORIZED COLLARS ---
@@ -86,6 +89,15 @@ String getAuthorizedCollarList() {
 }
 
 // --- 🛠️ INITIALIZATION ---
+void clearStorage() {
+    Serial.println("⚠️ FACTORY RESET: Erasing all NVS data...");
+    nvs_flash_erase();
+    nvs_flash_init();
+    Serial.println("✅ NVS Erased. Rebooting...");
+    delay(2000);
+    ESP.restart();
+}
+
 void initStorage() {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {

@@ -63,6 +63,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 bool connectToWiFi(String ssid, String pass) {
+    WiFi.disconnect(true); // 🚩 Ensure clean state
+    delay(100); 
+
     WiFi.begin(ssid.c_str(), pass.c_str());
     Serial.print("🌐 Connecting to WiFi: " + ssid);
     int attempts = 0;
