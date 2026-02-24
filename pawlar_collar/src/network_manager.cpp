@@ -7,6 +7,7 @@
 #include <BlynkSimpleEsp32.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include "cellular_manager.h"
 
 extern WiFiClientSecure testWifiClient;
 extern PubSubClient client;
@@ -29,10 +30,18 @@ void connectToCloud(String ssid, String pass) {
         testWifiClient.setInsecure(); 
         client.setServer(MQTT_SERVER, MQTT_PORT);
 
-        String clientId = "Pawlar-" + getUniqueDeviceID();
+        String macAddr = getMACAddress();
+        String clientId = "Pawlar-" + macAddr;
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
             Serial.println("✅ MQTT Connected instantly!");
 
+            // 1. Send specific WiFi confirmation for the App
+            String wifiPayload = "{\"device_id\": \"" + macAddr + "\", \"isConnected\": true}";
+            String wifiTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
+            client.publish(wifiTopic.c_str(), wifiPayload.c_str());
+            Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
+
+            // 2. Send general status
             String statusPayload = "{";
             statusPayload += "\"id\": \"" + getUniqueDeviceID() + "\","; 
             statusPayload += "\"status\": \"ONLINE\",";
@@ -41,7 +50,14 @@ void connectToCloud(String ssid, String pass) {
 
             client.publish(TOPIC_STATUS, statusPayload.c_str()); 
             client.subscribe(TOPIC_BATTERY_SHARED);
+        } else {
+            Serial.println("❌ MQTT Connection Failed!");
+            sendWifiStatusCellular(false);
         }
+    } else {
+        Serial.println("\n❌ WiFi Connection Failed!");
+        // Notify app via Cellular if WiFi failed
+        sendWifiStatusCellular(false);
     }
 }
 

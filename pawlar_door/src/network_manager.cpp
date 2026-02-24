@@ -30,10 +30,19 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             String collarList = "";
 
             if (doc.is<JsonArray>()) {
-                for (JsonObject collar : doc.as<JsonArray>()) {
-                    if (collar.containsKey("device_id")) {
+                for (JsonVariant v : doc.as<JsonArray>()) {
+                    String id = "";
+                    if (v.is<JsonObject>()) {
+                        if (v.containsKey("device_id")) {
+                            id = v["device_id"].as<String>();
+                        }
+                    } else {
+                        id = v.as<String>();
+                    }
+
+                    if (id != "") {
                         if (collarList != "") collarList += "|";
-                        collarList += collar["device_id"].as<String>();
+                        collarList += id;
                     }
                 }
             } 

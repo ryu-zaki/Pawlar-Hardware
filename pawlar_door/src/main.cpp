@@ -12,6 +12,8 @@
 bool isMoving = false;
 TaskHandle_t BLETask; // Handle for the background task on Core 0
 String authorizedCollarsCache = "";
+unsigned long dualPressStartTime = 0;
+bool isDualPressing = false;
 
 // --- Function Prototypes ---
 void stopMotors();
@@ -147,9 +149,26 @@ void loop() {
     bool btnUp = (digitalRead(BTN_UP) == LOW);
     bool btnDown = (digitalRead(BTN_DOWN) == LOW);
 
-    // 1. High Priority: Manual Button Reading
+    // 1. Check for Dual Press (Pairing Mode) FIRST
+    if (btnUp && btnDown) {
+        if (!isDualPressing) {
+            isDualPressing = true;
+            dualPressStartTime = millis();
+            Serial.println("⚠️ Dual press detected. Hold for 3s for pairing mode...");
+            stopMotors(); // Ensure the door doesn't move while holding
+        } else if (millis() - dualPressStartTime > 2000) {
+            Serial.println("🔄 Entering Pairing Mode! Rebooting...");
+            // Option A: Factory Reset (clears WiFi AND Collars)
+            clearStorage(); 
+        }
+        return; // Skip individual button logic while holding both
+    } else {
+        isDualPressing = false; // Reset the timer if a button is released
+    }
+
+    // 2. Individual Manual Button Reading
     if (btnUp || btnDown) {
-        isMoving = true; // Mark as moving so system knows motors are active
+        isMoving = true; 
         if (btnUp) {
             moveUp();
             handleManualActivityLog("MANUAL_UP");
@@ -161,9 +180,7 @@ void loop() {
         return;
     }
 
-    // 2. Idle Logic
-    // If NO buttons are pressed, and the system thinks it's moving, stop it.
-    // The automated control is handled on Core 0. This is a manual override stop.
+    // 3. Idle Logic
     if (!btnUp && !btnDown) {
         if (isMoving) {
             Serial.println("🛑 Manual Override: Stopping Motors.");

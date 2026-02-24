@@ -53,7 +53,7 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
 
 void initBLEProvisioning() {
     // Gamitin ang MAC address format para sa Setup Name
-    String doorSetupName = getUniqueDoorID() + "_Setup";
+    String doorSetupName = "pawlar door setup";
     
     BLEDevice::init(doorSetupName.c_str()); 
     BLEServer *pServer = BLEDevice::createServer();

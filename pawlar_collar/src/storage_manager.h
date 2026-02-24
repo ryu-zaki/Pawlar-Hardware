@@ -8,4 +8,5 @@ String getPass();
 bool isPairingRequested();
 void setPairingRequest(bool enable);
 String getUniqueDeviceID();
+String getMACAddress();
 #endif

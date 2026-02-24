@@ -93,3 +93,49 @@ bool sendCellularMQTT(float lat, float lng, int bat) {
         return false;
     }
 }
+
+bool sendWifiStatusCellular(bool isConnected) {
+    if (WiFi.status() == WL_CONNECTED && isConnected) return false;
+
+    Serial.println("\n🌍 4G: Sending WiFi Status...");
+
+    cellSerial.println("AT+NETOPEN?");
+    if (!waitForResponse("+NETOPEN: 1", 1000)) {
+        cellSerial.println("AT+NETOPEN");
+        waitForResponse("+NETOPEN: 0", 5000);
+    }
+
+    cellSerial.println("AT+CMQTTSTOP");
+    delay(500);
+    cellSerial.println("AT+CMQTTREL=0");
+    delay(500);
+
+    cellSerial.println("AT+CMQTTSTART");
+    if (!waitForResponse("OK", 5000)) return false;
+
+    String macAddr = getMACAddress();
+    String clientID = "Collar-WiFi-" + macAddr;
+    cellSerial.println("AT+CMQTTACCQ=0,\"" + clientID + "\",1"); 
+    if (!waitForResponse("OK", 5000)) return false;
+
+    cellSerial.println("AT+CMQTTSSLCFG=0,0"); 
+    waitForResponse("OK", 1000);
+
+    String conn = "AT+CMQTTCONNECT=0,\"ssl://" + String(MQTT_SERVER) + ":8883\",60,1,\"" + String(MQTT_USER) + "\",\"" + String(MQTT_PASSWORD) + "\"";
+    cellSerial.println(conn);
+    
+    if (waitForResponse("+CMQTTCONNECT: 0,0", 45000)) { 
+        String payload = "{\"device_id\":\"" + macAddr + "\",\"isConnected\":" + (isConnected ? "true" : "false") + "}";
+        String topic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
+
+        cellSerial.println("AT+CMQTTTOPIC=0," + String(topic.length()));
+        delay(100); cellSerial.println(topic);
+        cellSerial.println("AT+CMQTTPAYLOAD=0," + String(payload.length()));
+        delay(100); cellSerial.println(payload);
+        cellSerial.println("AT+CMQTTPUB=0,1,60");
+        
+        Serial.println("✅ WiFi Status sent via 4G: " + payload);
+        return true;
+    }
+    return false;
+}

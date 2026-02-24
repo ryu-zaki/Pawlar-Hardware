@@ -32,6 +32,18 @@ void setPairingRequest(bool enable) {
     preferences.putBool("pairing_req", enable);
     preferences.end();
 }
+String getMACAddress() {
+    uint64_t chipid = ESP.getEfuseMac();
+    char macStr[20];
+    snprintf(macStr, 20, "%02X:%02X:%02X:%02X:%02X:%02X",
+             (uint8_t)(chipid >> 0),
+             (uint8_t)(chipid >> 8),
+             (uint8_t)(chipid >> 16),
+             (uint8_t)(chipid >> 24),
+             (uint8_t)(chipid >> 32),
+             (uint8_t)(chipid >> 40));
+    return String(macStr);
+}
 String getUniqueDeviceID() {
     uint64_t chipid = ESP.getEfuseMac();
     uint32_t low = (uint32_t)chipid;
