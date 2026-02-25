@@ -1,6 +1,8 @@
 #include "storage_manager.h"
 #include <Preferences.h>
 #include <nvs_flash.h>
+#include <esp_system.h>
+
 Preferences preferences;
 
 void saveWiFiCreds(String ssid, String pass) {
@@ -33,22 +35,18 @@ void setPairingRequest(bool enable) {
     preferences.end();
 }
 String getMACAddress() {
-    uint64_t chipid = ESP.getEfuseMac();
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
     char macStr[20];
     snprintf(macStr, 20, "%02X:%02X:%02X:%02X:%02X:%02X",
-             (uint8_t)(chipid >> 0),
-             (uint8_t)(chipid >> 8),
-             (uint8_t)(chipid >> 16),
-             (uint8_t)(chipid >> 24),
-             (uint8_t)(chipid >> 32),
-             (uint8_t)(chipid >> 40));
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     return String(macStr);
 }
 String getUniqueDeviceID() {
-    uint64_t chipid = ESP.getEfuseMac();
-    uint32_t low = (uint32_t)chipid;
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
     char idString[20];
-    snprintf(idString, 20, "COLLAR_%08X", low);
+    snprintf(idString, 20, "COLLAR_%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
     return String(idString);
 }
 void initStorage() {

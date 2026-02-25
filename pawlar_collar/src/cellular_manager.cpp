@@ -65,7 +65,8 @@ bool sendCellularMQTT(float lat, float lng, int bat) {
         return false;
     }
 
-    String clientID = "Collar-" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    String macAddr = getMACAddress();
+    String clientID = "Collar-" + macAddr;
     cellSerial.println("AT+CMQTTACCQ=0,\"" + clientID + "\",1"); 
     if (!waitForResponse("OK", 5000)) return false;
 
