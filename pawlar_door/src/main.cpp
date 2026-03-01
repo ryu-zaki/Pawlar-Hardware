@@ -9,11 +9,12 @@
 #include <esp_task_wdt.h>
 
 // --- Global State ---
-bool isMoving = false;
+volatile bool isMoving = false;
 TaskHandle_t BLETask; // Handle for the background task on Core 0
 String authorizedCollarsCache = "";
 unsigned long dualPressStartTime = 0;
 bool isDualPressing = false;
+bool manualActionInProgress = false; // Track if the door is moving due to manual button press
 
 // --- Function Prototypes ---
 void stopMotors();
@@ -168,6 +169,7 @@ void loop() {
 
     // 2. Individual Manual Button Reading
     if (btnUp || btnDown) {
+        manualActionInProgress = true; 
         isMoving = true; 
         if (btnUp) {
             moveUp();
@@ -180,12 +182,13 @@ void loop() {
         return;
     }
 
-    // 3. Idle Logic
+    // 3. Idle Logic (Manual Override Handling)
     if (!btnUp && !btnDown) {
-        if (isMoving) {
-            Serial.println("🛑 Manual Override: Stopping Motors.");
+        if (manualActionInProgress) {
+            Serial.println("🛑 Manual Button Released: Stopping Motors.");
             stopMotors();
             isMoving = false;
+            manualActionInProgress = false;
         }
     }
 }

@@ -74,7 +74,10 @@ void initBLE(bool isPairing) {
     BLEAdvertisementData advData;
     advData.setName(deviceName.c_str());
     advData.setFlags(0x06); // General Discoverable Mode
+    advData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    
     pAdv->setAdvertisementData(advData);
+    pAdv->setScanResponseData(advData); // Ensure name is visible in scan response too
 
     BLEDevice::startAdvertising();
     

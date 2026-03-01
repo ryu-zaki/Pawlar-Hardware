@@ -70,6 +70,7 @@ String getUniqueDoorID() {
 
 // --- 🔒 AUTHORIZED COLLARS ---
 void saveAuthorizedCollar(String collarList) {
+    collarList.trim();
     prefs.begin("pawlar", false);
     prefs.putString("collar_list", collarList);
     prefs.end();
@@ -85,6 +86,7 @@ String getAuthorizedCollarList() {
     }
     
     prefs.end();
+    list.trim();
     return list; 
 }
 

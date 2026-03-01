@@ -7,15 +7,16 @@
 #include <Arduino.h>
 
 extern bool isPathClear;
-extern bool isMoving;
+extern volatile bool isMoving;
 extern bool petHasPassed; // ADDED: To know when the pet has passed through
+extern String authorizedCollarsCache;
 
 void moveUp();
 void moveDown();
 void stopMotors();
 
 // --- CONFIG ---
-const int RSSI_THRESHOLD_OPEN = -75;
+const int RSSI_THRESHOLD_OPEN = -75; // Slightly more forgiving for better responsiveness
 const int RSSI_THRESHOLD_CLOSE = -90; // More forgiving threshold for closing
 const unsigned long TRAVEL_TIME = 10000; // 10 seconds
 const unsigned long COLLAR_TIMEOUT = 2000; // 2 seconds
@@ -39,8 +40,17 @@ void initProximityScan() {
 }
 
 void scanForCollar() {
-    String authList = getAuthorizedCollarList();
-    if (authList == "") return;
+    String authList = authorizedCollarsCache;
+    if (authList == "") {
+        // Serial.println("DEBUG: authList is empty");
+        return;
+    }
+
+    static unsigned long lastDebugPrint = 0;
+    if (millis() - lastDebugPrint > 5000) {
+        Serial.println("DEBUG: Current Auth List: [" + authList + "]");
+        lastDebugPrint = millis();
+    }
 
     // --- Always be scanning to keep RSSI fresh ---
     BLEScan* pBLEScan = BLEDevice::getScan();
@@ -50,8 +60,21 @@ void scanForCollar() {
     for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
         String foundName = device.getName().c_str();
+        String foundAddr = device.getAddress().toString().c_str();
+        foundAddr.toUpperCase(); // Ensure consistency
+        
+        // DEBUG: Print all found devices to help troubleshoot
+        if (foundName.startsWith("COLLAR") || authList.indexOf(foundAddr) != -1) {
+            Serial.printf("DEBUG: Found Device: [%s] (%s), RSSI: %d, Authorized: %s\n", 
+                          foundName.c_str(), foundAddr.c_str(), device.getRSSI(), 
+                          (authList.indexOf(foundName) != -1 || authList.indexOf(foundAddr) != -1) ? "YES" : "NO");
+        }
 
-        if (authList.indexOf(foundName) != -1 && foundName.length() > 0) {
+        bool isAuthorized = false;
+        if (foundName.length() > 0 && authList.indexOf(foundName) != -1) isAuthorized = true;
+        if (authList.indexOf(foundAddr) != -1) isAuthorized = true;
+
+        if (isAuthorized) {
             lastSeenRssi = device.getRSSI();
             lastSeenCollarTime = millis();
             authorizedCollarFound = true;
