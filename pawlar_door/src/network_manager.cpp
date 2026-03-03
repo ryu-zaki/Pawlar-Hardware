@@ -20,9 +20,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     
     Serial.println("📩 MQTT Message [" + topicStr + "]: " + message);
 
-    String myLinkedCollarsTopic = "pawlar/door/linked-collars/" + getDeviceId();
+    String myId = getDeviceId();
+    String myLinkedCollarsTopic = "pawlar/door/linked-collars/" + myId;
+    String mySyncTopic = "pawlar/door/" + myId + "/sync";
 
-    if (topicStr == myLinkedCollarsTopic) {
+    // --- HANDLE COLLAR SYNC (Either Topic) ---
+    if (topicStr == myLinkedCollarsTopic || (topicStr == mySyncTopic && message.indexOf("device_id") != -1)) {
         JsonDocument doc; 
         DeserializationError error = deserializeJson(doc, message);
 
@@ -33,7 +36,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 for (JsonVariant v : doc.as<JsonArray>()) {
                     String id = "";
                     if (v.is<JsonObject>()) {
-                        if (v.containsKey("device_id")) {
+                        if (v["device_id"].is<JsonVariant>()) {
                             id = v["device_id"].as<String>();
                         }
                     } else {
@@ -46,7 +49,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                     }
                 }
             } 
-            else if (doc.is<JsonObject>() && doc.containsKey("device_id")) {
+            else if (doc.is<JsonObject>() && doc["device_id"].is<JsonVariant>()) {
                 collarList = doc["device_id"].as<String>();
             }
 
@@ -107,8 +110,16 @@ void initNetwork() {
         if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, wifiStatusTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
+            // --- SUBSCRIBE TO RELEVANT TOPICS ---
             client.subscribe(linkedCollarsTopic.c_str()); 
             Serial.println("👂 Subscribed to: " + linkedCollarsTopic);
+
+            String syncTopic = "pawlar/door/" + doorIdentity + "/sync";
+            client.subscribe(syncTopic.c_str());
+            Serial.println("👂 Subscribed to: " + syncTopic);
+
+            client.subscribe("pawlar/door/sync"); // General sync topic
+            Serial.println("👂 Subscribed to: pawlar/door/sync");
 
             String onlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());

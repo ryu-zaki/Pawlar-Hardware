@@ -52,8 +52,8 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLEProvisioning() {
-    // Gamitin ang MAC address format para sa Setup Name
-    String doorSetupName = "pawlar door setup";
+    // Unique ID based setup name
+    String doorSetupName = "DOOR_" + getUniqueDoorID() + " Setup";
     
     BLEDevice::init(doorSetupName.c_str()); 
     BLEServer *pServer = BLEDevice::createServer();
@@ -71,6 +71,13 @@ void initBLEProvisioning() {
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
+    
+    // Ensure name is visible in scan
+    BLEAdvertisementData advData;
+    advData.setName(doorSetupName.c_str());
+    advData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    pAdvertising->setAdvertisementData(advData);
+    
     pAdvertising->start();
     
     Serial.println("📡 BLE Setup Portal Active: " + doorSetupName);

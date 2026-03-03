@@ -32,7 +32,8 @@ int lastSeenRssi = -100;
 unsigned long lastSeenCollarTime = 0;
 
 void initProximityScan() {
-    BLEDevice::init("pawlar door setup");
+    String doorName = "DOOR_" + getUniqueDoorID();
+    BLEDevice::init(doorName.c_str());
     BLEScan* pBLEScan = BLEDevice::getScan();
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);

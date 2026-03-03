@@ -63,7 +63,13 @@ void initBLE(bool isPairing) {
 
     // --- 📡 ADVERTISING OPTIMIZATION ---
     BLEAdvertising *pAdv = BLEDevice::getAdvertising();
-    pAdv->addServiceUUID(SERVICE_UUID);
+    
+    // 🚩 Only add Service UUID to advertisement if in pairing mode
+    // This hides the device from the App Scanner when it's just being a beacon!
+    if (isPairing) {
+        pAdv->addServiceUUID(SERVICE_UUID);
+    }
+    
     pAdv->setScanResponse(true); 
     
     BLEDevice::setPower(ESP_PWR_LVL_P9); 
@@ -74,7 +80,10 @@ void initBLE(bool isPairing) {
     BLEAdvertisementData advData;
     advData.setName(deviceName.c_str());
     advData.setFlags(0x06); // General Discoverable Mode
-    advData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    
+    if (isPairing) {
+        advData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    }
     
     pAdv->setAdvertisementData(advData);
     pAdv->setScanResponseData(advData); // Ensure name is visible in scan response too
