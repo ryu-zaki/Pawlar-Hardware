@@ -2,8 +2,8 @@
 #include <ESP32Servo.h>
 
 // Updated to "Safe" Pins (GPIO 14 and 27)
-const int BUTTON_PIN = 14; 
-const int SERVO_PIN  = 27;
+const int BUTTON_PIN = 4; 
+const int SERVO_PIN  = 13;
 
 Servo myServo;
 
