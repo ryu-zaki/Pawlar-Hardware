@@ -31,8 +31,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
         if (!error) {
             String collarList = "";
+            bool validMessage = false;
 
             if (doc.is<JsonArray>()) {
+                validMessage = true; 
                 for (JsonVariant v : doc.as<JsonArray>()) {
                     String id = "";
                     if (v.is<JsonObject>()) {
@@ -50,10 +52,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 }
             } 
             else if (doc.is<JsonObject>() && doc["device_id"].is<JsonVariant>()) {
+                validMessage = true;
                 collarList = doc["device_id"].as<String>();
             }
 
-            if (collarList != "") {
+            if (validMessage) {
                 saveAuthorizedCollar(collarList);
                 
                 // 🚩 Update the global RAM cache instantly!
@@ -62,7 +65,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 Serial.println("💾 NVS & Cache Updated! Authorized Collars: " + collarList);
                 publishDoorActivity("AUTH_SYNC_COMPLETE", 0.0);
             } else {
-                Serial.println("⚠️ JSON received, but no 'device_id' was found.");
+                Serial.println("⚠️ JSON received, but no valid collar data was found.");
             }
         } else {
             Serial.print("❌ JSON Parse Error: ");
