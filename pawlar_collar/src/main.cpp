@@ -15,11 +15,10 @@
 #include "network_manager.h"
 #include "ble_manager.h"
 #include "cellular_manager.h"
-#include <SoftwareSerial.h>
 
 // The Serial handle for the A7670C (Keep for Serial Bridge)
-extern SoftwareSerial swSerial;
-#define CELL_PORT swSerial
+// extern SoftwareSerial swSerial;
+// #define CELL_PORT swSerial
 
 WiFiClientSecure testWifiClient;
 PubSubClient client(testWifiClient);
@@ -103,8 +102,8 @@ void setup() {
     // 2. Start BLE with the CORRECT mode
     initBLE(pairingMode); 
 
-    initGPS();
-    initCellular(); 
+    // initGPS();
+    initCellular();
 
     // 3. Network Config
     testWifiClient.setInsecure(); 
@@ -119,16 +118,9 @@ void setup() {
 }
 
 void loop() {
-    // 1. ⌨️ SERIAL BRIDGE (Modified for SoftwareSerial)
-    while (Serial.available()) {
-        CELL_PORT.write(Serial.read());
-    }
-    while (CELL_PORT.available()) {
-        Serial.write(CELL_PORT.read());
-    }
 
     // 2. 🛰️ GPS & NETWORK LOGIC
-    readGPS(); 
+    // readGPS(); 
 
     bool isWiFiAvailable = (WiFi.status() == WL_CONNECTED);
 

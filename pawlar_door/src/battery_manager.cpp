@@ -15,9 +15,12 @@ float getVoltage() {
     // Read 10 times and average for stability
     long sum = 0;
     for(int i = 0; i < 10; i++) {
-        sum += analogRead(35);
+        sum += analogRead(BATTERY_PIN);
     }
     float rawAverage = sum / 10.0;
+    
+    // 🚩 DEBUG: Print raw value to Serial
+    Serial.printf("📊 Raw ADC Average: %.2f\n", rawAverage);
     
     // 3.3V / 4095 * 12.36 (Calculated Multiplier)
     float voltage = (rawAverage * 3.3 / 4095.0) * 12.36;

@@ -6,10 +6,15 @@
 #include "ble_manager.h"
 #include "battery_manager.h" 
 #include "safety_manager.h"
+#include <esp_task_wdt.h>
 
 // --- Global State ---
-bool isMoving = false;
+volatile bool isMoving = false;
 TaskHandle_t BLETask; // Handle for the background task on Core 0
+String authorizedCollarsCache = "";
+unsigned long dualPressStartTime = 0;
+bool isDualPressing = false;
+bool manualActionInProgress = false; // Track if the door is moving due to manual button press
 
 // --- Function Prototypes ---
 void stopMotors();
@@ -18,16 +23,24 @@ void moveDown();
 void handleManualActivityLog(String event);
 
 // --- Core 0 Task: Bluetooth Scanning ---
-// This function runs independently on the second processor core.
 void BLELoop(void * pvParameters) {
     Serial.print("🔵 BLE Task started on Core: ");
     Serial.println(xPortGetCoreID());
 
+    // 🚩 1. Register this task with the Watchdog so it doesn't get killed
+    esp_task_wdt_add(NULL);
+
     initProximityScan();
 
     for(;;) {
+        // 🚩 2. Feed the dog! (Reset the timer so it doesn't crash)
+        esp_task_wdt_reset();
+
         scanForCollar();
-        vTaskDelay(500 / portTICK_PERIOD_MS);
+        
+        // 🚩 3. Increase delay to let the CPU breathe
+        // 50ms is plenty fast for a door, but prevents crashes
+        vTaskDelay(50 / portTICK_PERIOD_MS); 
     }
 }
 
@@ -81,6 +94,17 @@ void setup() {
     pinMode(MOT_A_IN1, OUTPUT); pinMode(MOT_A_IN2, OUTPUT); pinMode(MOT_A_ENA, OUTPUT);
     pinMode(MOT_B_IN3, OUTPUT); pinMode(MOT_B_IN4, OUTPUT); pinMode(MOT_B_ENB, OUTPUT);
 
+    // 🚩 FACTORY RESET CHECK: Hold UP + DOWN buttons for 3 seconds at boot
+    if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
+        Serial.println("⚠️ RESET DETECTED: Hold buttons for 3s to clear NVS...");
+        delay(3000); 
+        if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
+            clearStorage(); // Will erase NVS and reboot
+        } else {
+            Serial.println("❌ Reset aborted.");
+        }
+    }
+
     // Initialize Managers
     initStorage();
     initBatteryMonitor();
@@ -89,6 +113,9 @@ void setup() {
     String ssid = getSSID();
     String pass = getPass();
 
+    authorizedCollarsCache = getAuthorizedCollarList(); 
+    Serial.println("📋 Loaded Authorized Collars: " + authorizedCollarsCache);
+        
     if (ssid == "") {
         initBLEProvisioning();
     } else {
@@ -106,6 +133,9 @@ void setup() {
                 &BLETask,       /* Task handle */
                 0               /* Core ID (0) */
             );
+        } else {
+            Serial.println("❌ Saved WiFi failed to connect. Falling back to BLE Setup...");
+            initBLEProvisioning();
         }
     }
     Serial.println("🚀 System Online. Core 1 handling Buttons/Motors.");
@@ -120,9 +150,27 @@ void loop() {
     bool btnUp = (digitalRead(BTN_UP) == LOW);
     bool btnDown = (digitalRead(BTN_DOWN) == LOW);
 
-    // 1. High Priority: Manual Button Reading
+    // 1. Check for Dual Press (Pairing Mode) FIRST
+    if (btnUp && btnDown) {
+        if (!isDualPressing) {
+            isDualPressing = true;
+            dualPressStartTime = millis();
+            Serial.println("⚠️ Dual press detected. Hold for 3s for pairing mode...");
+            stopMotors(); // Ensure the door doesn't move while holding
+        } else if (millis() - dualPressStartTime > 2000) {
+            Serial.println("🔄 Entering Pairing Mode! Rebooting...");
+            // Option A: Factory Reset (clears WiFi AND Collars)
+            clearStorage(); 
+        }
+        return; // Skip individual button logic while holding both
+    } else {
+        isDualPressing = false; // Reset the timer if a button is released
+    }
+
+    // 2. Individual Manual Button Reading
     if (btnUp || btnDown) {
-        isMoving = true; // Mark as moving so system knows motors are active
+        manualActionInProgress = true; 
+        isMoving = true; 
         if (btnUp) {
             moveUp();
             handleManualActivityLog("MANUAL_UP");
@@ -134,14 +182,13 @@ void loop() {
         return;
     }
 
-    // 2. Idle Logic
-    // If NO buttons are pressed, and the system thinks it's moving, stop it.
-    // The automated control is handled on Core 0. This is a manual override stop.
+    // 3. Idle Logic (Manual Override Handling)
     if (!btnUp && !btnDown) {
-        if (isMoving) {
-            Serial.println("🛑 Manual Override: Stopping Motors.");
+        if (manualActionInProgress) {
+            Serial.println("🛑 Manual Button Released: Stopping Motors.");
             stopMotors();
             isMoving = false;
+            manualActionInProgress = false;
         }
     }
 }

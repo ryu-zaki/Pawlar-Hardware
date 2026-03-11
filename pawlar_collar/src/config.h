@@ -51,5 +51,6 @@ static const char* BACKEND_URL = "https://your-project-name.railway.app/api/tele
 #define TOPIC_STATUS           "pawlar/collar/status"
 #define TOPIC_BATTERY_SHARED   "pawlar/collar/battery"
 #define TOPIC_COMMANDS         "pawlar/collar/commands"
+#define TOPIC_WIFI_PUB         "pawlar/collar/wifi"
 
 #endif

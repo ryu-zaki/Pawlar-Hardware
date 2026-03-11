@@ -41,7 +41,7 @@ void initBLE(bool isPairing) {
     BLEServer *pServer = BLEDevice::createServer();
     BLEService *pS = pServer->createService(SERVICE_UUID);
     
-    // ... Characteristic code remains the same ...
+    // --- 1. The ID Characteristic (Read Only - Existing code) ---
     BLECharacteristic *pId = pS->createCharacteristic(
         "beb5483e-36e1-4688-b7f5-ea07361b26a9", 
         BLECharacteristic::PROPERTY_READ
@@ -49,28 +49,44 @@ void initBLE(bool isPairing) {
     String idJson = "{\"dev_id\":\"" + getUniqueDeviceID() + "\",\"type\":\"collar\"}";
     pId->setValue(idJson.c_str());
 
+    // --- 2. 🚩 NEW: The WiFi Credentials Characteristic (Write Only) ---
+    // This MUST match the Door so the App can use the same code!
+    BLECharacteristic *pWifi = pS->createCharacteristic(
+        CHAR_CREDENTIALS_UUID, // Uses 2388432a-360e-4363-8025-055171736417 from config.h
+        BLECharacteristic::PROPERTY_WRITE | 
+        BLECharacteristic::PROPERTY_WRITE_NR
+    );
+    // Attach the callback so it actually parses the JSON when the App sends it!
+    pWifi->setCallbacks(new PairingCallbacks());
+
     pS->start();
 
     // --- 📡 ADVERTISING OPTIMIZATION ---
     BLEAdvertising *pAdv = BLEDevice::getAdvertising();
     
-    // 1. ADD THIS: Explicitly set the name in the advertisement
-    // This is what the Door looks for in 'device.getName()'
-    pAdv->addServiceUUID(SERVICE_UUID);
+    // 🚩 Only add Service UUID to advertisement if in pairing mode
+    // This hides the device from the App Scanner when it's just being a beacon!
+    if (isPairing) {
+        pAdv->addServiceUUID(SERVICE_UUID);
+    }
+    
     pAdv->setScanResponse(true); 
     
-    // 2. BOOST POWER: Ensure the signal is strong enough to hit -65dBm
     BLEDevice::setPower(ESP_PWR_LVL_P9); 
 
-    // 3. SET INTERVALS: (Already good, but keep these)
     pAdv->setMinInterval(0x20); // 20ms
     pAdv->setMaxInterval(0x40); // 40ms
     
-    // 4. IMPORTANT: Re-apply the name to the advertising data specifically
     BLEAdvertisementData advData;
     advData.setName(deviceName.c_str());
     advData.setFlags(0x06); // General Discoverable Mode
+    
+    if (isPairing) {
+        advData.setCompleteServices(BLEUUID(SERVICE_UUID));
+    }
+    
     pAdv->setAdvertisementData(advData);
+    pAdv->setScanResponseData(advData); // Ensure name is visible in scan response too
 
     BLEDevice::startAdvertising();
     

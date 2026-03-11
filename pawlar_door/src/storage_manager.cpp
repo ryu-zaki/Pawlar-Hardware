@@ -44,22 +44,33 @@ String getUserId() {
 }
 
 String getDeviceId() {
-    prefs.begin("pawlar", true);
-    String id = prefs.getString("device_id", "DOOR_DEFAULT_ID"); // Give it a default
+    prefs.begin("pawlar", true); // Read-only mode
+    String id = "";
+    if (prefs.isKey("device_id")) {
+        id = prefs.getString("device_id");
+    }
+    
     prefs.end();
+    if (id == "") {
+        return getUniqueDoorID();
+    }
     return id;
 }
 
 String getUniqueDoorID() {
-    uint64_t chipid = ESP.getEfuseMac(); 
-    uint32_t low = (uint32_t)chipid;
-    char idString[20];
-    snprintf(idString, 20, "DOOR_%08X", low);
-    return String(idString);
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_BT);
+    
+    char macStr[18];
+    snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X", 
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+             
+    return String(macStr);
 }
 
 // --- 🔒 AUTHORIZED COLLARS ---
 void saveAuthorizedCollar(String collarList) {
+    collarList.trim();
     prefs.begin("pawlar", false);
     prefs.putString("collar_list", collarList);
     prefs.end();
@@ -67,12 +78,28 @@ void saveAuthorizedCollar(String collarList) {
 
 String getAuthorizedCollarList() {
     prefs.begin("pawlar", true);
-    String list = prefs.getString("collar_list", ""); 
+    String list = "";
+    
+    // 🚩 FIX: Check if the key exists before trying to read it!
+    if (prefs.isKey("collar_list")) {
+        list = prefs.getString("collar_list", ""); 
+    }
+    
     prefs.end();
+    list.trim();
     return list; 
 }
 
 // --- 🛠️ INITIALIZATION ---
+void clearStorage() {
+    Serial.println("⚠️ FACTORY RESET: Erasing all NVS data...");
+    nvs_flash_erase();
+    nvs_flash_init();
+    Serial.println("✅ NVS Erased. Rebooting...");
+    delay(2000);
+    ESP.restart();
+}
+
 void initStorage() {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {

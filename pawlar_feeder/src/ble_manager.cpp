@@ -2,7 +2,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
-#include <ArduinoJson.h> // 🚩 Added ArduinoJson to parse the app's payload
+#include <ArduinoJson.h>
 #include "ble_manager.h"
 #include "storage_manager.h" 
 #include "network_manager.h"
@@ -15,47 +15,36 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
             String input = String(value.c_str());
             Serial.println("📥 WiFi Credentials received: " + input);
 
-            // 🚩 1. Parse the incoming JSON from the app
             JsonDocument doc; 
             DeserializationError error = deserializeJson(doc, input);
 
-            // 🚩 2. Check if parsing was successful
             if (!error) {
                 const char* s = doc["ssid"]; 
                 const char* p = doc["password"];
 
-                // 🚩 3. Verify both keys exist
                 if (s && p) {
                     String ssid = String(s);
                     String pass = String(p);
 
-                    Serial.println("🔄 Testing WiFi Connection before saving...");
+                    Serial.println("🔄 Testing WiFi Connection...");
                     if (connectToWiFi(ssid, pass)) {
-                        // Save to NVS ONLY IF successful
                         saveCredentials(ssid, pass); 
-                        Serial.println("✅ WiFi Verified & Saved. Rebooting to establish cloud connection...");
+                        Serial.println("✅ WiFi Verified & Saved. Rebooting...");
                         delay(2000);
                         ESP.restart(); 
                     } else {
-                        Serial.println("❌ WiFi Connection Failed. Credentials NOT saved.");
-                        Serial.println("📢 Please check your SSID/Password and try again via the app.");
+                        Serial.println("❌ WiFi Connection Failed.");
                     }
-                } else {
-                    Serial.println("❌ Error: JSON missing 'ssid' or 'password' keys.");
                 }
-            } else {
-                Serial.print("❌ Error: Invalid JSON format. Reason: ");
-                Serial.println(error.c_str());
             }
         }
     }
 };
 
 void initBLEProvisioning() {
-    // Unique ID based setup name
-    String doorSetupName = "DOOR_" + getUniqueDoorID() + " Setup";
+    String feederSetupName = "FEEDER_" + getUniqueFeederID() + " Setup";
     
-    BLEDevice::init(doorSetupName.c_str()); 
+    BLEDevice::init(feederSetupName.c_str()); 
     BLEServer *pServer = BLEDevice::createServer();
     BLEService *pService = pServer->createService(SERVICE_UUID);
 
@@ -72,13 +61,12 @@ void initBLEProvisioning() {
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     
-    // Ensure name is visible in scan
     BLEAdvertisementData advData;
-    advData.setName(doorSetupName.c_str());
+    advData.setName(feederSetupName.c_str());
     advData.setCompleteServices(BLEUUID(SERVICE_UUID));
     pAdvertising->setAdvertisementData(advData);
     
     pAdvertising->start();
     
-    Serial.println("📡 BLE Setup Portal Active: " + doorSetupName);
+    Serial.println("📡 BLE Setup Portal Active: " + feederSetupName);
 }

@@ -7,29 +7,33 @@
 #include <Arduino.h>
 
 extern bool isPathClear;
-extern bool isMoving;
+extern volatile bool isMoving;
 extern bool petHasPassed; // ADDED: To know when the pet has passed through
+extern String authorizedCollarsCache;
 
 void moveUp();
 void moveDown();
 void stopMotors();
 
 // --- CONFIG ---
-const int RSSI_THRESHOLD_OPEN = -65;
-const int RSSI_THRESHOLD_CLOSE = -75; // More forgiving threshold for closing
+const int RSSI_THRESHOLD_OPEN = -75; // Slightly more forgiving for better responsiveness
+const int RSSI_THRESHOLD_CLOSE = -90; // More forgiving threshold for closing
 const unsigned long TRAVEL_TIME = 10000; // 10 seconds
 const unsigned long COLLAR_TIMEOUT = 2000; // 2 seconds
+const unsigned long WAITING_TIMEOUT = 5000; // 5 seconds for door to wait before closing
 
 // --- STATE MACHINE ---
 enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
 DoorState currentDoorState = DOOR_IDLE;
 
 unsigned long doorCycleStartTime = 0;
+unsigned long waitingStartTime = 0; // Added: To track when the door entered WAITING state
 int lastSeenRssi = -100;
 unsigned long lastSeenCollarTime = 0;
 
 void initProximityScan() {
-    BLEDevice::init("PawlarDoor");
+    String doorName = "DOOR_" + getUniqueDoorID();
+    BLEDevice::init(doorName.c_str());
     BLEScan* pBLEScan = BLEDevice::getScan();
     pBLEScan->setActiveScan(true);
     pBLEScan->setInterval(100);
@@ -37,8 +41,17 @@ void initProximityScan() {
 }
 
 void scanForCollar() {
-    String authList = getAuthorizedCollarList();
-    if (authList == "") return;
+    String authList = authorizedCollarsCache;
+    if (authList == "") {
+        // Serial.println("DEBUG: authList is empty");
+        return;
+    }
+
+    static unsigned long lastDebugPrint = 0;
+    if (millis() - lastDebugPrint > 5000) {
+        Serial.println("DEBUG: Current Auth List: [" + authList + "]");
+        lastDebugPrint = millis();
+    }
 
     // --- Always be scanning to keep RSSI fresh ---
     BLEScan* pBLEScan = BLEDevice::getScan();
@@ -48,8 +61,21 @@ void scanForCollar() {
     for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
         String foundName = device.getName().c_str();
+        String foundAddr = device.getAddress().toString().c_str();
+        foundAddr.toUpperCase(); // Ensure consistency
+        
+        // DEBUG: Print all found devices to help troubleshoot
+        if (foundName.startsWith("COLLAR") || authList.indexOf(foundAddr) != -1) {
+            Serial.printf("DEBUG: Found Device: [%s] (%s), RSSI: %d, Authorized: %s\n", 
+                          foundName.c_str(), foundAddr.c_str(), device.getRSSI(), 
+                          (authList.indexOf(foundName) != -1 || authList.indexOf(foundAddr) != -1) ? "YES" : "NO");
+        }
 
-        if (authList.indexOf(foundName) != -1 && foundName.length() > 0) {
+        bool isAuthorized = false;
+        if (foundName.length() > 0 && authList.indexOf(foundName) != -1) isAuthorized = true;
+        if (authList.indexOf(foundAddr) != -1) isAuthorized = true;
+
+        if (isAuthorized) {
             lastSeenRssi = device.getRSSI();
             lastSeenCollarTime = millis();
             authorizedCollarFound = true;
@@ -77,6 +103,7 @@ void scanForCollar() {
                 Serial.println("🛑 Door has reached the top. Now waiting.");
                 stopMotors();
                 currentDoorState = DOOR_WAITING;
+                waitingStartTime = millis(); // Set waiting start time
             }
             break;
 
@@ -93,6 +120,12 @@ void scanForCollar() {
                 currentDoorState = DOOR_CLOSING;
                 doorCycleStartTime = millis(); // Reset timer for closing
             }
+            // Condition 3: Waiting time elapsed
+            else if (millis() - waitingStartTime >= WAITING_TIMEOUT) {
+                Serial.println("⏳ Waiting time elapsed. Starting close sequence.");
+                currentDoorState = DOOR_CLOSING;
+                doorCycleStartTime = millis(); // Reset timer for closing
+            }
             break;
 
         case DOOR_CLOSING:
@@ -103,6 +136,7 @@ void scanForCollar() {
                 Serial.println("⚠️ OBSTACLE! Pausing close.");
                 // To prevent it from immediately trying to close again, we can go back to waiting
                 currentDoorState = DOOR_WAITING;
+                waitingStartTime = millis(); // Reset waiting start time when returning to WAITING due to obstacle
                 return;
             }
 

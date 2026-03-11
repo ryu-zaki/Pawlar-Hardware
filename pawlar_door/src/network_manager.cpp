@@ -1,12 +1,14 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
+#include <ArduinoJson.h> 
 #include "network_manager.h"
 #include "storage_manager.h"
 #include "battery_manager.h"
 #include "config.h"
+
+// 🚩 This allows network_manager to see the variable from main.cpp
+extern String authorizedCollarsCache; 
 
 WiFiClientSecure doorWifiClient;
 PubSubClient client(doorWifiClient);
@@ -18,25 +20,67 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     
     Serial.println("📩 MQTT Message [" + topicStr + "]: " + message);
 
-    // FIX: Check if the topic ends with /sync to handle dynamic door IDs
-    if (topicStr.endsWith("/sync") || topicStr == "pawlar/door/sync") {
-        if (message == "GET_BATTERY") {
-            reportBatteryHealth();
+    String myId = getDeviceId();
+    String myLinkedCollarsTopic = "pawlar/door/linked-collars/" + myId;
+    String mySyncTopic = "pawlar/door/" + myId + "/sync";
+
+    // --- HANDLE COLLAR SYNC (Either Topic) ---
+    if (topicStr == myLinkedCollarsTopic || (topicStr == mySyncTopic && message.indexOf("device_id") != -1)) {
+        JsonDocument doc; 
+        DeserializationError error = deserializeJson(doc, message);
+
+        if (!error) {
+            String collarList = "";
+            bool validMessage = false;
+
+            if (doc.is<JsonArray>()) {
+                validMessage = true; 
+                for (JsonVariant v : doc.as<JsonArray>()) {
+                    String id = "";
+                    if (v.is<JsonObject>()) {
+                        if (v["device_id"].is<JsonVariant>()) {
+                            id = v["device_id"].as<String>();
+                        }
+                    } else {
+                        id = v.as<String>();
+                    }
+
+                    if (id != "") {
+                        if (collarList != "") collarList += "|";
+                        collarList += id;
+                    }
+                }
+            } 
+            else if (doc.is<JsonObject>() && doc["device_id"].is<JsonVariant>()) {
+                validMessage = true;
+                collarList = doc["device_id"].as<String>();
+            }
+
+            if (validMessage) {
+                saveAuthorizedCollar(collarList);
+                
+                // 🚩 Update the global RAM cache instantly!
+                authorizedCollarsCache = collarList; 
+                
+                Serial.println("💾 NVS & Cache Updated! Authorized Collars: " + collarList);
+                publishDoorActivity("AUTH_SYNC_COMPLETE", 0.0);
+            } else {
+                Serial.println("⚠️ JSON received, but no valid collar data was found.");
+            }
         } else {
-            // 1. Save the Collar ID received from Postman/Backend
-            saveAuthorizedCollar(message); 
-            
-            // 2. VERIFY
-            String verifiedList = getAuthorizedCollarList();
-            Serial.println("💾 NVS Updated! Authorized: " + verifiedList);
-            
-            // 3. Feedback to Backend
-            publishDoorActivity("AUTH_SYNC_COMPLETE", 0.0);
+            Serial.print("❌ JSON Parse Error: ");
+            Serial.println(error.c_str());
         }
     } 
+    else if (message == "GET_BATTERY") {
+        reportBatteryHealth();
+    }
 }
 
 bool connectToWiFi(String ssid, String pass) {
+    WiFi.disconnect(true); // 🚩 Ensure clean state
+    delay(100); 
+
     WiFi.begin(ssid.c_str(), pass.c_str());
     Serial.print("🌐 Connecting to WiFi: " + ssid);
     int attempts = 0;
@@ -50,51 +94,15 @@ bool connectToWiFi(String ssid, String pass) {
     return false;
 }
 
-void requestCollarSync() {
-    if (WiFi.status() == WL_CONNECTED) {
-        HTTPClient http;
-        String serverPath = "http://192.168.0.110:3001/doors/all-collars"; 
-        
-        http.begin(serverPath);
-        http.addHeader("Content-Type", "application/json");
-
-        String httpRequestData = "{\"user_id\":\"" + getUserId() + "\"}";
-
-        Serial.println("📡 Syncing with DB...");
-        int httpResponseCode = http.POST(httpRequestData);
-        
-        if (httpResponseCode == 200) {
-            String response = http.getString();
-            JsonDocument doc; 
-            DeserializationError error = deserializeJson(doc, response);
-
-            if (!error) {
-                JsonArray collars = doc["collars"];
-                String collarList = "";
-                for (JsonObject collar : collars) {
-                    String petId = collar["pet_id"].as<String>();
-                    if (collarList != "") collarList += "|";
-                    collarList += petId;
-                }
-                if (collarList != "") {
-                    saveAuthorizedCollar(collarList);
-                    Serial.println("💾 DB Sync Success: " + collarList);
-                }
-            }
-        } else {
-            Serial.println("❌ DB Sync Failed. Code: " + String(httpResponseCode));
-        }
-        http.end();
-    }
-}
-
 void initNetwork() {
     doorWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqttCallback); 
     
-    String doorIdentity = getUniqueDoorID(); 
-    String syncTopic = "pawlar/door/" + doorIdentity + "/sync";
+    String doorIdentity = getDeviceId(); 
+    String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
+    String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;
+    String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": false}";
 
     Serial.println("☁️ Connecting to HiveMQ...");
     
@@ -102,19 +110,24 @@ void initNetwork() {
     while (!client.connected() && retryCount < 3) {
         Serial.printf("Attempt %d as %s\n", retryCount + 1, doorIdentity.c_str());
         
-        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, wifiStatusTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
-            // 🔥 SUCCESS: Subscribe now that we are connected
-            client.subscribe(syncTopic.c_str()); 
-            client.subscribe("pawlar/door/sync"); // Fallback global topic
-            
+            // --- SUBSCRIBE TO RELEVANT TOPICS ---
+            client.subscribe(linkedCollarsTopic.c_str()); 
+            Serial.println("👂 Subscribed to: " + linkedCollarsTopic);
+
+            String syncTopic = "pawlar/door/" + doorIdentity + "/sync";
+            client.subscribe(syncTopic.c_str());
             Serial.println("👂 Subscribed to: " + syncTopic);
 
-            String statePayload = "{\"device_id\": \"" + doorIdentity + "\", \"connected\": true}";
-            client.publish("pawlar/door/wifi", statePayload.c_str());
+            client.subscribe("pawlar/door/sync"); // General sync topic
+            Serial.println("👂 Subscribed to: pawlar/door/sync");
 
-            requestCollarSync();
+            String onlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": true}";
+            client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
+            Serial.println("📤 Published Status: " + onlinePayload);
+
         } else {
             Serial.printf("❌ Failed (rc=%d). Retrying...\n", client.state());
             delay(1000); 
