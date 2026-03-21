@@ -26,10 +26,16 @@ String getPass() {
 }
 
 String getDeviceId() {
-    prefs.begin("pawlar_f", true);
-    String id = prefs.getString("device_id", "");
+    prefs.begin("pawlar_f", false); // Open in read/write mode to save if missing
+    String id = "";
+    if (prefs.isKey("device_id")) {
+        id = prefs.getString("device_id", "");
+    } else {
+        id = getUniqueFeederID();
+        prefs.putString("device_id", id);
+        Serial.println("🆔 Generated and saved new Device ID: " + id);
+    }
     prefs.end();
-    if (id == "") return getUniqueFeederID();
     return id;
 }
 

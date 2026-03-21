@@ -102,7 +102,7 @@ void setup() {
     // 2. Start BLE with the CORRECT mode
     initBLE(pairingMode); 
 
-    // initGPS();
+    initGPS();
     initCellular();
 
     // 3. Network Config
@@ -120,7 +120,7 @@ void setup() {
 void loop() {
 
     // 2. 🛰️ GPS & NETWORK LOGIC
-    // readGPS(); 
+    readGPS(); 
 
     bool isWiFiAvailable = (WiFi.status() == WL_CONNECTED);
 

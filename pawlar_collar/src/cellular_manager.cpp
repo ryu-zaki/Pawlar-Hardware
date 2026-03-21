@@ -1,10 +1,11 @@
 #include <WiFi.h>
+#include <SoftwareSerial.h>
 #include "cellular_manager.h"
 #include "config.h"
 #include "storage_manager.h"
 
-// Use HardwareSerial for the cellular module
-HardwareSerial cellSerial(1);
+// Software Serial on Pins 20 and 21 to avoid HardwareSerial conflict
+SoftwareSerial cellSerial(GSM_RX_PIN, GSM_TX_PIN);
 
 bool waitForResponse(const char* expected, uint32_t timeout) {
     uint32_t start = millis();
@@ -16,24 +17,58 @@ bool waitForResponse(const char* expected, uint32_t timeout) {
 }
 
 void initCellular() {
-    pinMode(5, OUTPUT); 
-    digitalWrite(5, LOW); delay(100); 
-    digitalWrite(5, HIGH); delay(1000);           
-    digitalWrite(5, LOW);
+    cellSerial.begin(GSM_BAUD);
+    Serial.println("📡 Checking if A7670C is already awake...");
     
-    cellSerial.begin(GSM_BAUD, SERIAL_8N1, GSM_RX_PIN, GSM_TX_PIN);
-    
-    Serial.println("📡 Checking A7670C Presence...");
-    cellSerial.println("AT"); 
-    
-    // Lower the timeout to 500ms for the first check
-    if (!waitForResponse("OK", 500)) { 
-        Serial.println("⚠️ No Cellular Module detected. Skipping init.");
-        return; // Exit function so it doesn't hang the loop
+    // Check 3 times if it's already on
+    bool alreadyOn = false;
+    for(int i=0; i<3; i++) {
+        cellSerial.println("AT"); 
+        if (waitForResponse("OK", 500)) {
+            alreadyOn = true;
+            break;
+        }
+        delay(200);
+    }
+
+    if (alreadyOn) {
+        Serial.println("✅ A7670C is already ON and responding!");
+    } else {
+        Serial.println("⚡ Module silent. Pulsing PWR_KEY (Pin 5) to wake it up...");
+        pinMode(5, OUTPUT); 
+        digitalWrite(5, HIGH); delay(1500); // Standard pulse
+        digitalWrite(5, LOW);
+        delay(3000); // Wait for boot
+        
+        cellSerial.println("AT");
+        if (waitForResponse("OK", 2000)) {
+            Serial.println("✅ A7670C successfully woken up!");
+        } else {
+            Serial.println("⚠️ Still no response. Check PEN pin and 5V Power supply!");
+            return;
+        }
     }
     
+    // Basic setup
     cellSerial.println("AT+CGDCONT=1,\"IP\",\"internet\""); 
     waitForResponse("OK", 2000);
+
+    // --- 🔍 NETWORK DIAGNOSTICS ---
+    Serial.println("📡 Checking Network Status...");
+    
+    // Check Signal Strength (CSQ)
+    cellSerial.println("AT+CSQ");
+    waitForResponse("+CSQ:", 1000); 
+    
+    // Check Network Registration (CREG)
+    cellSerial.println("AT+CREG?");
+    if (waitForResponse("+CREG: 0,1", 1000) || waitForResponse("+CREG: 0,5", 1000)) {
+        Serial.println("✅ NETWORK: Registered (Home or Roaming)");
+    } else {
+        Serial.println("❌ NETWORK: Not Registered. Check SIM or Antenna!");
+    }
+
+    Serial.println("🌐 Cellular ready for failover.");
 }
 
 bool sendCellularMQTT(float lat, float lng, int bat) {

@@ -98,11 +98,13 @@ void initNetwork() {
     doorWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqttCallback); 
+    client.setKeepAlive(15); 
     
     String doorIdentity = getDeviceId(); 
+    String lwtTopic = "pawlar/door/status";
     String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
     String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;
-    String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": false}";
+    String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
 
     Serial.println("☁️ Connecting to HiveMQ...");
     
@@ -110,7 +112,7 @@ void initNetwork() {
     while (!client.connected() && retryCount < 3) {
         Serial.printf("Attempt %d as %s\n", retryCount + 1, doorIdentity.c_str());
         
-        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, wifiStatusTopic.c_str(), 0, false, offlinePayload.c_str())) {
+        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
             // --- SUBSCRIBE TO RELEVANT TOPICS ---

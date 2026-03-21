@@ -5,8 +5,12 @@
 #include "network_manager.h"
 #include "storage_manager.h"
 #include "config.h"
+#include "loadcell_manager.h"
+#include "servo_manager.h"
 
 extern String authorizedCollarsCache; 
+extern LoadCellManager loadCellManager;
+extern ServoManager servoManager;
 
 WiFiClientSecure feederWifiClient;
 PubSubClient client(feederWifiClient);
@@ -15,12 +19,32 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     String message = "";
     for (int i = 0; i < length; i++) message += (char)payload[i];
     String topicStr = String(topic);
-    
+
     Serial.println("📩 MQTT Message [" + topicStr + "]: " + message);
 
     String myId = getDeviceId();
     String myLinkedCollarsTopic = "pawlar/feeder/linked-collars/" + myId;
     String mySyncTopic = "pawlar/feeder/" + myId + "/sync";
+    String myCmdTopic = "pawlar/feeder/" + myId + "/cmd";
+
+    if (topicStr == myCmdTopic) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            String command = doc["command"].as<String>();
+            if (command == "tare") {
+                Serial.println("⚖️ Remote Command: Taring Scale...");
+                loadCellManager.tare();
+                publishFeederActivity("CMD_TARE", 0);
+            } else if (command == "dispense") {
+                float target = doc["amount"] | 200.0f;
+                Serial.println("🍖 Remote Command: Dispensing " + String(target) + "g...");
+                servoManager.dispenseWeight(target, loadCellManager);
+                publishFeederActivity("CMD_DISPENSE", target);
+            }
+        }
+        return;
+    }
 
     if (topicStr == myLinkedCollarsTopic || topicStr == mySyncTopic || topicStr == "pawlar/feeder/sync") {
         JsonDocument doc; 
@@ -76,17 +100,25 @@ void initNetwork() {
     feederWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqttCallback); 
+    client.setKeepAlive(15); 
     
     String feederIdentity = getDeviceId(); 
     String statusTopic = "pawlar/feeder/wifi/" + feederIdentity;
     String linkedCollarsTopic = "pawlar/feeder/linked-collars/" + feederIdentity;
+    String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": false}";
 
     int retryCount = 0;
     while (!client.connected() && retryCount < 3) {
-        if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, statusTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
+            
+            // Subscriptions
             client.subscribe(linkedCollarsTopic.c_str()); 
             client.subscribe("pawlar/feeder/sync");
+            String cmdTopic = "pawlar/feeder/" + feederIdentity + "/cmd";
+            client.subscribe(cmdTopic.c_str());
+            Serial.println("📡 Subscribed to: " + cmdTopic);
+
             String onlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": true}";
             client.publish(statusTopic.c_str(), onlinePayload.c_str());
         } else {

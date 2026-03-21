@@ -1,11 +1,13 @@
 #include "proximity_manager.h"
 #include "storage_manager.h"
 #include "servo_manager.h"
+#include "network_manager.h"
 #include <BLEDevice.h>
 #include <Arduino.h>
 
 extern String authorizedCollarsCache;
 extern ServoManager servoManager;
+extern LoadCellManager loadCellManager;
 
 // --- CONFIG ---
 const int RSSI_THRESHOLD_DISPENSE = -75; 
@@ -51,8 +53,9 @@ void scanForCollar() {
 
     if (authorizedCollarFound && maxRssi >= RSSI_THRESHOLD_DISPENSE) {
         if (millis() - lastDispenseTime > DISPENSE_COOLDOWN) {
-            Serial.println("🐾 Authorized pet detected! Dispensing food...");
-            servoManager.dispense();
+            Serial.println("🐾 Authorized pet detected! Dispensing 200g food...");
+            servoManager.dispenseWeight(200.0, loadCellManager);
+            publishFeederActivity("AUTO_DISPENSE", 200.0);
             lastDispenseTime = millis();
         } else {
             Serial.println("⏳ Pet still nearby, but cooldown active.");

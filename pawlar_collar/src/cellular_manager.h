@@ -2,9 +2,9 @@
 #define CELLULAR_MANAGER_H
 
 #include <Arduino.h>
-#include <HardwareSerial.h>
+#include <SoftwareSerial.h>
 
-extern HardwareSerial cellSerial;
+extern SoftwareSerial cellSerial;
 
 void initCellular();
 bool sendCellularSMS(String phoneNumber, String message);

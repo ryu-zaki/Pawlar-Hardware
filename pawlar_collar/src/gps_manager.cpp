@@ -3,18 +3,29 @@
 #include <TinyGPSPlus.h>
 
 TinyGPSPlus gps;
-// ESP32-C3 only has Serial 0 (USB) and Serial 1. HardwareSerial(2) will crash.
+// Use Hardware Serial 1 - matching the successful gps_test.cpp
 HardwareSerial gpsSerial(1); 
 
 void initGPS() { 
-    // RX=Pin 3, TX=Pin 2 as per your config.h
+    // Initialize Hardware Serial on the confirmed working pins
     gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN); 
-    Serial.println("🛰️ GPS Serial 1 started on Pins 3(RX) and 2(TX)");
+    Serial.printf("🛰️ GPS HardwareSerial started on Pins %d(RX) and %d(TX)\n", GPS_RX_PIN, GPS_TX_PIN);
 }
 
 void readGPS() { 
+    static unsigned long lastDataTime = 0;
+
     while (gpsSerial.available() > 0) {
-        gps.encode(gpsSerial.read()); 
+        char c = gpsSerial.read();
+        gps.encode(c); 
+        lastDataTime = millis();
+    }
+
+    // Diagnostic: If no data at all for 10 seconds, print a warning
+    static unsigned long lastWarning = 0;
+    if (millis() - lastDataTime > 10000 && millis() - lastWarning > 10000) {
+        Serial.println("⚠️ WARNING: No raw data from GPS module. Check TX/RX wiring!");
+        lastWarning = millis();
     }
 }
 

@@ -8,6 +8,10 @@
 #define TRIG_PIN   5
 #define ECHO_PIN   18
 
+// --- HX711 (Load Cell) Pins ---
+#define HX711_DT_PIN   12
+#define HX711_SCK_PIN  14
+
 // --- ☁️ MQTT CONFIG (HiveMQ Cloud) ---
 #define MQTT_SERVER      "296f68459e704b318eb8bf075b9f3067.s1.eu.hivemq.cloud"
 #define MQTT_PORT        8883   
