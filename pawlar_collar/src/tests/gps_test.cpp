@@ -2,8 +2,8 @@
 #include <TinyGPSPlus.h>
 
 // --- Configuration ---
-#define GPS_RX_PIN 2  // Connected to GPS TX
-#define GPS_TX_PIN 3  // Connected to GPS RX
+#define GPS_RX_PIN 3  // Connected to GPS TX
+#define GPS_TX_PIN 2  // Connected to GPS RX
 #define BUTTON_PIN 9  
 #define GPS_BAUD 9600 // Try 9600 first, then 115200 if it fails
 

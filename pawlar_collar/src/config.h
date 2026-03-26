@@ -14,12 +14,12 @@ static const char* BACKEND_URL = "https://your-project-name.railway.app/api/tele
 #define BUTTON_PIN      9      // Side Button (Pin 9 to GND)
 #define LED_PIN         8      // Onboard System LED
 
-// 🛰️ GPS (Confirmed working on Pins 3 and 2)
-#define GPS_RX_PIN      2     
-#define GPS_TX_PIN      3      
+// 🛰️ GPS (Matching your latest wiring: RX on 3, TX on 4)
+#define GPS_RX_PIN      3    
+#define GPS_TX_PIN      2
 
-// 🔋 Battery Health Sensor
-#define BATTERY_PIN     4      // Analog Input from 100k Divider
+// 🔋 Battery Health Sensor (Moved to Pin 1 to avoid GPS conflict)
+#define BATTERY_PIN     1      // Analog Input from 100k Divider
 
 // --- 📡 4G Module (A7670C) ---
 #define GSM_RX_PIN      6      // 4G TX -> ESP32 RX

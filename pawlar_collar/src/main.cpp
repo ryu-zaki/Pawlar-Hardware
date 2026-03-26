@@ -78,7 +78,13 @@ void mqtt_reconnect() {
         } else {
             Serial.print("❌ Failed, rc=");
             Serial.println(client.state()); 
-            delay(5000);
+            
+            // SMART DELAY: Wait 5 seconds, but keep reading the GPS
+            unsigned long waitStart = millis();
+            while(millis() - waitStart < 5000) {
+                readGPS();
+                delay(10);
+            }
         }
     }
 }
@@ -105,22 +111,39 @@ void setup() {
     initGPS();
     initCellular();
 
+    // --- 🔍 BOOT DIAGNOSTICS ---
+    String s = getSSID();
+    Serial.println("\n--- 🛠️ System State ---");
+    Serial.println("Pairing Mode: " + String(pairingMode ? "ON (BLE Active)" : "OFF (Network Active)"));
+    Serial.println("Saved SSID: " + (s == "" ? "[EMPTY]" : s));
+    Serial.println("----------------------\n");
+
     // 3. Network Config
     testWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqtt_callback);
 
-    // If pairingMode is false, it means we are in BEACON mode
-    if (!pairingMode) {
-        String s = getSSID(); String p = getPass();
-        if (s != "") connectToCloud(s, p); 
+    if (!pairingMode && s != "") {
+        connectToCloud(s, getPass()); 
+    } else if (s == "" && !pairingMode) {
+        Serial.println("⚠️ No WiFi credentials saved. Please use the app to pair.");
     }
 }
 
 void loop() {
-
     // 2. 🛰️ GPS & NETWORK LOGIC
     readGPS(); 
+
+    // Diagnostic: Check if GPS is actually decoding data
+    static unsigned long lastGpsCheck = 0;
+    if (millis() - lastGpsCheck > 10000) {
+        lastGpsCheck = millis();
+        if (!isGpsCommuncating()) {
+            Serial.println("⚠️ GPS ALERT: No data being decoded. Check baud rate/pins!");
+        } else {
+            Serial.printf("🛰️ GPS STATUS: Decoding OK. Sats visible: %d\n", getSatellites());
+        }
+    }
 
     bool isWiFiAvailable = (WiFi.status() == WL_CONNECTED);
 
@@ -137,18 +160,24 @@ void loop() {
             } else {
                 String scanPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"status\": \"SCANNING\", \"sats\": " + String(getSatellites()) + "}";
                 client.publish(TOPIC_GPS_PUB, scanPayload.c_str());
-                Serial.println("🛰️ GPS Scanning");
+                Serial.println("🛰️ GPS Scanning (WiFi Active)");
             }
             lastSend = millis();
         }
     }
     else if (!pairingMode && !isWiFiAvailable) {
-        // FAILOVER LOGIC
+        // --- FAILOVER LOGIC (4G Persistent) ---
         static unsigned long lastCellUpdate = 0;
-        if (millis() - lastCellUpdate > 60000) { 
+
+        if (millis() - lastCellUpdate > 30000) { // Send every 30 seconds
             lastCellUpdate = millis();
-            Serial.println("📶 WiFi Lost. Attempting 4G Failover...");
-            sendCellularMQTT(getLat(), getLng(), getBatteryPercentage());
+            
+            if (hasFix()) {
+                sendCellularMQTT(getLat(), getLng(), getBatteryPercentage(), getSatellites(), "LOCKED");
+            } else {
+                Serial.printf("🛰️ 4G FAILOVER: GPS Scanning... (Sats: %d)\n", getSatellites());
+                sendCellularMQTT(0.0, 0.0, getBatteryPercentage(), getSatellites(), "SCANNING");
+            }
         }
     }
 
@@ -163,9 +192,13 @@ void loop() {
 
             while (digitalRead(BUTTON_PIN) == LOW) {
                 digitalWrite(LED_PIN, !digitalRead(LED_PIN)); 
-                delay(100); 
-                yield(); // Prevents Watchdog reset
-
+                
+                unsigned long dStart = millis();
+                while(millis() - dStart < 100) { 
+                    readGPS(); 
+                    delay(5); 
+                }
+                yield();
                 unsigned long holdTime = millis() - start;
 
                 if (holdTime > 10000) {

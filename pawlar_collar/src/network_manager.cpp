@@ -33,15 +33,16 @@ void connectToCloud(String ssid, String pass) {
 
         String macAddr = getMACAddress();
         String clientId = "Pawlar-" + macAddr;
-        String wifiTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
-        String offlinePayload = "{\"device_id\": \"" + macAddr + "\", \"isConnected\": false}";
+        String lwtTopic = "pawlar/collar/status";
+        String wifiStatusTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
+        String offlinePayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
 
-        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, wifiTopic.c_str(), 0, false, offlinePayload.c_str())) {
+        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ MQTT Connected instantly!");
 
             // 1. Send specific WiFi confirmation for the App
-            String wifiPayload = "{\"device_id\": \"" + macAddr + "\", \"isConnected\": true}";
-            client.publish(wifiTopic.c_str(), wifiPayload.c_str());
+            String wifiPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"isConnected\": true}";
+            client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
 
             // 2. Send general status
@@ -55,12 +56,11 @@ void connectToCloud(String ssid, String pass) {
             client.subscribe(TOPIC_BATTERY_SHARED);
         } else {
             Serial.println("❌ MQTT Connection Failed!");
-            sendWifiStatusCellular(false);
+            // sendWifiStatusCellular(false); // Disabled: Backend not ready
         }
     } else {
         Serial.println("\n❌ WiFi Connection Failed!");
-        // Notify app via Cellular if WiFi failed
-        sendWifiStatusCellular(false);
+        // sendWifiStatusCellular(false); // Disabled: Backend not ready
     }
 }
 

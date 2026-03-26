@@ -2,10 +2,9 @@
 #define GPS_MANAGER_H
 #include <Arduino.h>
 
-extern HardwareSerial gpsSerial;
-
 void initGPS();
 void readGPS();
+bool isGpsCommuncating();
 bool hasFix();
 float getLat();
 float getLng();

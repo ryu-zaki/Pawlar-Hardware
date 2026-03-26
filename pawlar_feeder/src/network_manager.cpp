@@ -103,13 +103,14 @@ void initNetwork() {
     client.setKeepAlive(15); 
     
     String feederIdentity = getDeviceId(); 
-    String statusTopic = "pawlar/feeder/wifi/" + feederIdentity;
+    String lwtTopic = "pawlar/feeder/status";
+    String wifiStatusTopic = "pawlar/feeder/wifi/" + feederIdentity;
     String linkedCollarsTopic = "pawlar/feeder/linked-collars/" + feederIdentity;
-    String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": false}";
+    String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
 
     int retryCount = 0;
     while (!client.connected() && retryCount < 3) {
-        if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, statusTopic.c_str(), 0, false, offlinePayload.c_str())) {
+        if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
             // Subscriptions
@@ -120,7 +121,7 @@ void initNetwork() {
             Serial.println("📡 Subscribed to: " + cmdTopic);
 
             String onlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": true}";
-            client.publish(statusTopic.c_str(), onlinePayload.c_str());
+            client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
         } else {
             delay(1000); 
             retryCount++;

@@ -1,32 +1,26 @@
 #include "gps_manager.h"
 #include "config.h"
 #include <TinyGPSPlus.h>
+#include <SoftwareSerial.h>
 
 TinyGPSPlus gps;
-// Use Hardware Serial 1 - matching the successful gps_test.cpp
-HardwareSerial gpsSerial(1); 
+// Use SoftwareSerial for Pins 3 and 2 to avoid UART0 conflict
+HardwareSerial gpsSerial(0);
 
 void initGPS() { 
-    // Initialize Hardware Serial on the confirmed working pins
-    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN); 
-    Serial.printf("🛰️ GPS HardwareSerial started on Pins %d(RX) and %d(TX)\n", GPS_RX_PIN, GPS_TX_PIN);
+    gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    Serial.printf("🛰️ GPS Initialized on Pins %d(RX), %d(TX) using Hardware UART0.\n", GPS_RX_PIN, GPS_TX_PIN);
 }
 
 void readGPS() { 
-    static unsigned long lastDataTime = 0;
-
     while (gpsSerial.available() > 0) {
-        char c = gpsSerial.read();
-        gps.encode(c); 
-        lastDataTime = millis();
+        gps.encode(gpsSerial.read()); 
     }
+}
 
-    // Diagnostic: If no data at all for 10 seconds, print a warning
-    static unsigned long lastWarning = 0;
-    if (millis() - lastDataTime > 10000 && millis() - lastWarning > 10000) {
-        Serial.println("⚠️ WARNING: No raw data from GPS module. Check TX/RX wiring!");
-        lastWarning = millis();
-    }
+// Add this to check if the library is actually receiving data
+bool isGpsCommuncating() {
+    return gps.charsProcessed() > 0;
 }
 
 bool hasFix() { 
