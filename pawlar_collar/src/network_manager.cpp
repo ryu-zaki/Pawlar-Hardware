@@ -44,7 +44,8 @@ void connectToCloud(String ssid, String pass) {
             String wifiPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
-
+            
+            /*
             // 2. Send general status
             String statusPayload = "{";
             statusPayload += "\"device_id\": \"" + getUniqueDeviceID() + "\","; 
@@ -52,7 +53,7 @@ void connectToCloud(String ssid, String pass) {
             statusPayload += "\"ip\": \"" + WiFi.localIP().toString() + "\"";
             statusPayload += "}";
 
-            client.publish(TOPIC_STATUS, statusPayload.c_str()); 
+            client.publish(TOPIC_STATUS, statusPayload.c_str()); */
             client.subscribe(TOPIC_BATTERY_SHARED);
         } else {
             Serial.println("❌ MQTT Connection Failed!");

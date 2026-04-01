@@ -95,8 +95,15 @@ void setup() {
     initStorage();
     Serial.println("\n🚀 Pawlar System Starting...");
 
-    // 1. READ THE SAVED STATE FROM STORAGE 🚩
-    pairingMode = isPairingRequested(); // <--- ADD THIS LINE
+    // 1. READ THE SAVED STATE FROM STORAGE
+    pairingMode = isPairingRequested(); 
+    String s = getSSID();
+
+    // 🚩 AUTO-PAIRING: If no WiFi is saved, force Pairing Mode
+    if (s == "") {
+        Serial.println("⚠️ No WiFi saved. Entering BLE Pairing Mode automatically...");
+        pairingMode = true;
+    }
 
     // 🔘 CONFIGURE BUTTON & INTERRUPT
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -112,10 +119,10 @@ void setup() {
     initCellular();
 
     // --- 🔍 BOOT DIAGNOSTICS ---
-    String s = getSSID();
     Serial.println("\n--- 🛠️ System State ---");
     Serial.println("Pairing Mode: " + String(pairingMode ? "ON (BLE Active)" : "OFF (Network Active)"));
     Serial.println("Saved SSID: " + (s == "" ? "[EMPTY]" : s));
+    Serial.println("Device ID: " + getUniqueDeviceID());
     Serial.println("----------------------\n");
 
     // 3. Network Config
@@ -125,9 +132,7 @@ void setup() {
 
     if (!pairingMode && s != "") {
         connectToCloud(s, getPass()); 
-    } else if (s == "" && !pairingMode) {
-        Serial.println("⚠️ No WiFi credentials saved. Please use the app to pair.");
-    }
+    } 
 }
 
 void loop() {

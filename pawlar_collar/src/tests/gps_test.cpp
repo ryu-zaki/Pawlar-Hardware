@@ -2,8 +2,8 @@
 #include <TinyGPSPlus.h>
 
 // --- Configuration ---
-#define GPS_RX_PIN 3  // Connected to GPS TX
-#define GPS_TX_PIN 2  // Connected to GPS RX
+#define GPS_RX_PIN 2  // Connected to GPS TX
+#define GPS_TX_PIN 3  // Connected to GPS RX
 #define BUTTON_PIN 9  
 #define GPS_BAUD 9600 // Try 9600 first, then 115200 if it fails
 
@@ -14,6 +14,10 @@ HardwareSerial gpsSerial(1);
 void setup() {
   Serial.begin(115200);
   delay(2000);
+  
+  pinMode(5, OUTPUT);                                                                      
+  digitalWrite(5, HIGH); delay(1500); // Pulse to turn off if it was on                    
+  digitalWrite(5, LOW); 
   
   Serial.println("\n--- 🛠️ GPS ADVANCED DIAGNOSTIC ---");
   Serial.printf("ESP32-C3 RX: Pin %d <--- GPS TX\n", GPS_RX_PIN);

@@ -15,8 +15,8 @@ static const char* BACKEND_URL = "https://your-project-name.railway.app/api/tele
 #define LED_PIN         8      // Onboard System LED
 
 // 🛰️ GPS (Matching your latest wiring: RX on 3, TX on 4)
-#define GPS_RX_PIN      3    
-#define GPS_TX_PIN      2
+#define GPS_RX_PIN      2    
+#define GPS_TX_PIN      3
 
 // 🔋 Battery Health Sensor (Moved to Pin 1 to avoid GPS conflict)
 #define BATTERY_PIN     1      // Analog Input from 100k Divider

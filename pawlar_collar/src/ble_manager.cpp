@@ -30,7 +30,7 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLE(bool isPairing) {
-    String deviceName = getUniqueDeviceID(); // COLLAR_XXXXXXXX
+    String deviceName = "COLLAR_" + getUniqueDeviceID(); 
 
     if (isPairing) {
         deviceName += " Setup"; 
