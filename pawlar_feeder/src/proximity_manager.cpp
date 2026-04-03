@@ -53,9 +53,10 @@ void scanForCollar() {
 
     if (authorizedCollarFound && maxRssi >= RSSI_THRESHOLD_DISPENSE) {
         if (millis() - lastDispenseTime > DISPENSE_COOLDOWN) {
-            Serial.println("🐾 Authorized pet detected! Dispensing 200g food...");
-            servoManager.dispenseWeight(200.0, loadCellManager);
-            publishFeederActivity("AUTO_DISPENSE", 200.0);
+            float target = getGramsPerServing();
+            Serial.println("🐾 Authorized pet detected! Dispensing " + String(target) + "g food...");
+            servoManager.dispenseWeight(target, loadCellManager);
+            publishFeederActivity("AUTO_DISPENSE", target);
             lastDispenseTime = millis();
         } else {
             Serial.println("⏳ Pet still nearby, but cooldown active.");

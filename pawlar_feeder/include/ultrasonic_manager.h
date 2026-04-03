@@ -4,9 +4,10 @@
 #include <Arduino.h>
 
 enum FeederState {
-    STATE_FULL,
-    STATE_WARNING,
+    STATE_HIGH,
+    STATE_MID,
     STATE_LOW,
+    STATE_EMPTY,
     STATE_UNKNOWN
 };
 

@@ -104,9 +104,10 @@ void loop() {
             // Wait for release
             while(digitalRead(BUTTON_PIN) == LOW) delay(10);
         } else {
-            Serial.println("Button Pressed! Manual Dispense (200g target).");
-            servoManager.dispenseWeight(200.0, loadCellManager);
-            publishFeederActivity("MANUAL_DISPENSE", 200.0);
+            float target = getGramsPerServing();
+            Serial.println("Button Pressed! Manual Dispense (" + String(target) + "g target).");
+            servoManager.dispenseWeight(target, loadCellManager);
+            publishFeederActivity("MANUAL_DISPENSE", target);
         }
         delay(500); // Debounce
     }

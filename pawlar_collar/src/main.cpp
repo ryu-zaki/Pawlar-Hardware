@@ -159,11 +159,11 @@ void loop() {
         if (millis() - lastSend > SEND_INTERVAL) {
             int bat = getBatteryPercentage();
             if (hasFix()) {
-                String gpsPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"lat\": " + String(getLat(), 6) + ", \"lng\": " + String(getLng(), 6) + ", \"sats\": " + String(getSatellites()) + ", \"status\": \"LOCKED\"}";
+                String gpsPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"coords\": {\"lat\": " + String(getLat(), 6) + ", \"long\": " + String(getLng(), 6) + "}, \"sats\": " + String(getSatellites()) + ", \"status\": \"LOCKED\"}";
                 client.publish(TOPIC_GPS_PUB, gpsPayload.c_str());
                 Serial.println("📤 Sent GPS (WiFi): " + gpsPayload);
             } else {
-                String scanPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"status\": \"SCANNING\", \"sats\": " + String(getSatellites()) + "}";
+                String scanPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"status\": \"SCANNING\", \"sats\": " + String(getSatellites()) + "}";
                 client.publish(TOPIC_GPS_PUB, scanPayload.c_str());
                 Serial.println("🛰️ GPS Scanning (WiFi Active)");
             }

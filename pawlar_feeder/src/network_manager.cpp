@@ -37,10 +37,17 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 loadCellManager.tare();
                 publishFeederActivity("CMD_TARE", 0);
             } else if (command == "dispense") {
-                float target = doc["amount"] | 200.0f;
+                float target = doc["amount"] | getGramsPerServing();
                 Serial.println("🍖 Remote Command: Dispensing " + String(target) + "g...");
                 servoManager.dispenseWeight(target, loadCellManager);
                 publishFeederActivity("CMD_DISPENSE", target);
+            } else if (command == "config") {
+                if (doc.containsKey("grams_per_serving")) {
+                    float g = doc["grams_per_serving"].as<float>();
+                    saveGramsPerServing(g);
+                    Serial.println("⚙️ Updated grams_per_serving to: " + String(g));
+                    publishFeederActivity("CONFIG_UPDATED", g);
+                }
             }
         }
         return;

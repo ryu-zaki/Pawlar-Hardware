@@ -39,21 +39,24 @@ FeederState UltrasonicManager::getState() {
     
     if (distance < 0) return STATE_UNKNOWN;
     
-    // Total 12cm, divided by 3 = 4cm intervals
-    if (distance <= 4.0) {
-        return STATE_FULL;
-    } else if (distance <= 8.0) {
-        return STATE_WARNING;
-    } else {
+    // Total 12cm, divided by 4 = 3cm intervals
+    if (distance <= 3.0) {
+        return STATE_HIGH;
+    } else if (distance <= 6.0) {
+        return STATE_MID;
+    } else if (distance <= 9.0) {
         return STATE_LOW;
+    } else {
+        return STATE_EMPTY;
     }
 }
 
 String UltrasonicManager::stateToString(FeederState state) {
     switch (state) {
-        case STATE_FULL:    return "FULL";
-        case STATE_WARNING: return "WARNING";
+        case STATE_HIGH:    return "HIGH";
+        case STATE_MID:     return "MID";
         case STATE_LOW:     return "LOW";
+        case STATE_EMPTY:   return "EMPTY";
         default:            return "UNKNOWN";
     }
 }

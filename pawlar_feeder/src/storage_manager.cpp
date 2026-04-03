@@ -62,6 +62,19 @@ String getAuthorizedCollarList() {
     return list; 
 }
 
+void saveGramsPerServing(float grams) {
+    prefs.begin("pawlar_f", false);
+    prefs.putFloat("grams_per", grams);
+    prefs.end();
+}
+
+float getGramsPerServing() {
+    prefs.begin("pawlar_f", true);
+    float grams = prefs.getFloat("grams_per", 200.0f);
+    prefs.end();
+    return grams;
+}
+
 void clearStorage() {
     nvs_flash_erase();
     nvs_flash_init();
