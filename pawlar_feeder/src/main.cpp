@@ -128,8 +128,14 @@ void loop() {
         Serial.print(weight);
         Serial.println(" g");
         
-        if (state == STATE_LOW) {
+        if (state == STATE_LOW || state == STATE_EMPTY) {
             publishFeederActivity("FOOD_LOW", distance);
+            static unsigned long lastStockAlert = 0;
+            if (millis() - lastStockAlert > 3600000) { // Notify every hour
+                String msg = (state == STATE_EMPTY) ? "food stock is empty!" : "food stock is running low.";
+                publishNotification("Food Stock Alert", msg, "CRITICAL");
+                lastStockAlert = millis();
+            }
         }
         
         // Publish weight to MQTT if needed

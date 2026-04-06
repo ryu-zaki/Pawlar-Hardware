@@ -7,6 +7,7 @@
 #include "esp_wifi.h"
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h> 
+#include <ArduinoJson.h>
 
 // --- INCLUDES ---
 #include "config.h"
@@ -29,6 +30,7 @@ const unsigned long SEND_INTERVAL = 2000;
 bool pairingMode = false;
 volatile bool btnPressed = false;
 unsigned long lastSend = 0; 
+bool lowBatteryNotified = false;
 
 void IRAM_ATTR isr() { btnPressed = true; }
 
@@ -71,8 +73,26 @@ void mqtt_reconnect() {
     if (WiFi.status() == WL_CONNECTED && !client.connected()) {
         String clientId = "PawlarCollar-" + getUniqueDeviceID();
         Serial.print("Connecting to HiveMQ...");
-        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+
+        String lwtTopic = TOPIC_NOTIFICATIONS;
+        JsonDocument lwtDoc;
+        lwtDoc["device_id"] = getUniqueDeviceID();
+        lwtDoc["device_type"] = "COLLAR";
+        lwtDoc["title"] = "Collar Offline";
+        lwtDoc["description"] = "went offline.";
+        lwtDoc["type"] = "WARNING";
+        String offlinePayload;
+        serializeJson(lwtDoc, offlinePayload);
+
+        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ CONNECTED!");
+            publishNotification("Collar Online", "is now online.", "INFO");
+            
+            if (isNewlyRegistered()) {
+                publishNotification("New Collar Registered", "is now registered to your account.", "INFO");
+                setNewlyRegistered(false);
+            }
+
             client.subscribe(TOPIC_BATTERY_SHARED); 
             client.subscribe(TOPIC_COMMANDS);
         } else {
@@ -158,6 +178,14 @@ void loop() {
 
         if (millis() - lastSend > SEND_INTERVAL) {
             int bat = getBatteryPercentage();
+            
+            if (bat <= 20 && !lowBatteryNotified) {
+                publishNotification("Collar Battery Low", "battery is low. Please charge it soon.", "WARNING");
+                lowBatteryNotified = true;
+            } else if (bat > 25) {
+                lowBatteryNotified = false;
+            }
+
             if (hasFix()) {
                 String gpsPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"coords\": {\"lat\": " + String(getLat(), 6) + ", \"long\": " + String(getLng(), 6) + "}, \"sats\": " + String(getSatellites()) + ", \"status\": \"LOCKED\"}";
                 client.publish(TOPIC_GPS_PUB, gpsPayload.c_str());

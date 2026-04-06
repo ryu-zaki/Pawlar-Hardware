@@ -9,5 +9,6 @@ extern PubSubClient client;
 void initNetwork();
 bool connectToWiFi(String ssid, String pass);
 void publishFeederActivity(String event, float data);
+void publishNotification(String title, String description, String type, String trigger_id = "");
 
 #endif

@@ -42,7 +42,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 servoManager.dispenseWeight(target, loadCellManager);
                 publishFeederActivity("CMD_DISPENSE", target);
             } else if (command == "config") {
-                if (doc.containsKey("grams_per_serving")) {
+                if (doc["grams_per_serving"].is<float>()) {
                     float g = doc["grams_per_serving"].as<float>();
                     saveGramsPerServing(g);
                     Serial.println("⚙️ Updated grams_per_serving to: " + String(g));
@@ -84,6 +84,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 saveAuthorizedCollar(collarList);
                 authorizedCollarsCache = collarList; 
                 Serial.println("💾 NVS & Cache Updated! Authorized Collars: " + collarList);
+                publishNotification("Collar Linked to Feeder", "is now linked to a collar.", "INFO");
             }
         }
     }
@@ -110,10 +111,11 @@ void initNetwork() {
     client.setKeepAlive(15); 
     
     String feederIdentity = getDeviceId(); 
-    String lwtTopic = "pawlar/feeder/status";
+    String lwtTopic = TOPIC_FEEDER_STATUS;
+    String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+
     String wifiStatusTopic = "pawlar/feeder/wifi/" + feederIdentity;
     String linkedCollarsTopic = "pawlar/feeder/linked-collars/" + feederIdentity;
-    String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
 
     int retryCount = 0;
     while (!client.connected() && retryCount < 3) {
@@ -129,6 +131,15 @@ void initNetwork() {
 
             String onlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
+
+            // Send Online Notification
+            publishNotification("Feeder Online", "is now online.", "INFO");
+
+            if (isNewlyRegistered()) {
+                publishNotification("New Feeder Registered", "is now registered.", "INFO");
+                setNewlyRegistered(false);
+            }
+
         } else {
             delay(1000); 
             retryCount++;
@@ -142,4 +153,23 @@ void publishFeederActivity(String event, float data) {
     if (client.connected()) {
         client.publish("pawlar/feeder/activity", payload.c_str());
     }
+}
+
+void publishNotification(String title, String description, String type, String trigger_id) {
+    if (!client.connected()) return;
+
+    JsonDocument doc;
+    doc["device_id"] = getDeviceId();
+    doc["device_type"] = "FEEDER";
+    doc["title"] = title;
+    doc["description"] = description;
+    doc["type"] = type;
+    if (trigger_id != "") {
+        doc["trigger_id"] = trigger_id;
+    }
+
+    String payload;
+    serializeJson(doc, payload);
+    client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
+    Serial.println("📤 Published Notification: " + payload);
 }

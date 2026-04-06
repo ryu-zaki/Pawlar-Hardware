@@ -9,4 +9,6 @@ bool isPairingRequested();
 void setPairingRequest(bool enable);
 String getUniqueDeviceID();
 String getMACAddress();
+bool isNewlyRegistered();
+void setNewlyRegistered(bool b);
 #endif

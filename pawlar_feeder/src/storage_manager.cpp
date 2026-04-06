@@ -75,6 +75,19 @@ float getGramsPerServing() {
     return grams;
 }
 
+bool isNewlyRegistered() {
+    prefs.begin("pawlar_f", true);
+    bool b = prefs.getBool("new_reg", false);
+    prefs.end();
+    return b;
+}
+
+void setNewlyRegistered(bool b) {
+    prefs.begin("pawlar_f", false);
+    prefs.putBool("new_reg", b);
+    prefs.end();
+}
+
 void clearStorage() {
     nvs_flash_erase();
     nvs_flash_init();

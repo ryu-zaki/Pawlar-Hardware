@@ -19,6 +19,7 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
                 const char* p = doc["password"];
                 if (s && p) {
                     saveWiFiCreds(s, p);
+                    setNewlyRegistered(true);
                     setPairingRequest(false);
                     Serial.println("💾 WiFi Credentials Saved! Rebooting...");
                     delay(1000); 

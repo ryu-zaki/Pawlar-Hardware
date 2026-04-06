@@ -90,6 +90,19 @@ String getAuthorizedCollarList() {
     return list; 
 }
 
+bool isNewlyRegistered() {
+    prefs.begin("pawlar", true);
+    bool b = prefs.getBool("new_reg", false);
+    prefs.end();
+    return b;
+}
+
+void setNewlyRegistered(bool b) {
+    prefs.begin("pawlar", false);
+    prefs.putBool("new_reg", b);
+    prefs.end();
+}
+
 // --- 🛠️ INITIALIZATION ---
 void clearStorage() {
     Serial.println("⚠️ FACTORY RESET: Erasing all NVS data...");

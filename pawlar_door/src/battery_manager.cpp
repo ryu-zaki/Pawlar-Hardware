@@ -35,6 +35,8 @@ int calculateBatteryPercentage(float voltage) {
     return (percentage / 10) * 10;
 }
 
+bool doorLowBatteryNotified = false;
+
 void reportBatteryHealth() {
     float voltage = getVoltage();
     int batPercent = calculateBatteryPercentage(voltage);
@@ -43,4 +45,10 @@ void reportBatteryHealth() {
     
     // We send 0.0 for current since resistors can't measure mA
     publishBatteryHealth(voltage, 0.0, batPercent); 
+    if (batPercent <= 20 && !doorLowBatteryNotified) {
+        publishNotification("Door Battery Low", "battery is low. Please check the power source.", "WARNING");
+        doorLowBatteryNotified = true;
+    } else if (batPercent > 25) {
+        doorLowBatteryNotified = false;
+    }
 }

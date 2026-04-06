@@ -33,9 +33,10 @@ void connectToCloud(String ssid, String pass) {
 
         String macAddr = getMACAddress();
         String clientId = "Pawlar-" + macAddr;
-        String lwtTopic = "pawlar/collar/status";
-        String wifiStatusTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
+        String lwtTopic = TOPIC_STATUS;
         String offlinePayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+
+        String wifiStatusTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
 
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ MQTT Connected instantly!");
@@ -44,16 +45,15 @@ void connectToCloud(String ssid, String pass) {
             String wifiPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
-            
-            /*
-            // 2. Send general status
-            String statusPayload = "{";
-            statusPayload += "\"device_id\": \"" + getUniqueDeviceID() + "\","; 
-            statusPayload += "\"status\": \"ONLINE\",";
-            statusPayload += "\"ip\": \"" + WiFi.localIP().toString() + "\"";
-            statusPayload += "}";
 
-            client.publish(TOPIC_STATUS, statusPayload.c_str()); */
+            // 2. Send Online Notification
+            publishNotification("Collar Online", "is now online.", "INFO");
+
+            if (isNewlyRegistered()) {
+                publishNotification("New Collar Registered", "is now registered to your account.", "INFO");
+                setNewlyRegistered(false);
+            }
+            
             client.subscribe(TOPIC_BATTERY_SHARED);
         } else {
             Serial.println("❌ MQTT Connection Failed!");
@@ -88,4 +88,23 @@ void sendLocationData(float lat, float lng, int sats) {
     serializeJson(doc, json);
     int code = http.POST(json);
     http.end();
+}
+
+void publishNotification(String title, String description, String type, String trigger_id) {
+    if (!client.connected()) return;
+
+    JsonDocument doc;
+    doc["device_id"] = getUniqueDeviceID();
+    doc["device_type"] = "COLLAR";
+    doc["title"] = title;
+    doc["description"] = description;
+    doc["type"] = type;
+    if (trigger_id != "") {
+        doc["trigger_id"] = trigger_id;
+    }
+
+    String payload;
+    serializeJson(doc, payload);
+    client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
+    Serial.println("📤 Published Notification: " + payload);
 }

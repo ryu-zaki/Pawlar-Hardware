@@ -33,6 +33,7 @@ void scanForCollar() {
 
     bool authorizedCollarFound = false;
     int maxRssi = -100;
+    String triggerId = "";
 
     for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
@@ -45,7 +46,10 @@ void scanForCollar() {
         if (authList.indexOf(foundAddr) != -1) isAuthorized = true;
 
         if (isAuthorized) {
-            if (device.getRSSI() > maxRssi) maxRssi = device.getRSSI();
+            if (device.getRSSI() > maxRssi) {
+                maxRssi = device.getRSSI();
+                triggerId = foundName.length() > 0 ? foundName : foundAddr;
+            }
             authorizedCollarFound = true;
         }
     }
@@ -57,6 +61,7 @@ void scanForCollar() {
             Serial.println("🐾 Authorized pet detected! Dispensing " + String(target) + "g food...");
             servoManager.dispenseWeight(target, loadCellManager);
             publishFeederActivity("AUTO_DISPENSE", target);
+            publishNotification("Food Dispensed", "successfully dispensed a meal.", "INFO", triggerId);
             lastDispenseTime = millis();
         } else {
             Serial.println("⏳ Pet still nearby, but cooldown active.");

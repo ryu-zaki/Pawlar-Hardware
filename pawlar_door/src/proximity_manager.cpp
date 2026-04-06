@@ -23,13 +23,37 @@ const unsigned long COLLAR_TIMEOUT = 2000; // 2 seconds
 const unsigned long WAITING_TIMEOUT = 5000; // 5 seconds for door to wait before closing
 
 // --- STATE MACHINE ---
-enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
 DoorState currentDoorState = DOOR_IDLE;
 
 unsigned long doorCycleStartTime = 0;
 unsigned long waitingStartTime = 0; // Added: To track when the door entered WAITING state
 int lastSeenRssi = -100;
 unsigned long lastSeenCollarTime = 0;
+String lastSeenCollarId = "";
+
+// --- REMOTE OVERRIDE STATE ---
+bool pendingManualConfirmation = false;
+String manualConfirmationState = "";
+
+void handleRemoteCommand(String state) {
+    if (state == "OPEN") {
+        Serial.println("🌐 MQTT CMD: OPENing Door...");
+        currentDoorState = DOOR_OPENING;
+        doorCycleStartTime = millis();
+        isMoving = true;
+        moveUp();
+        pendingManualConfirmation = true;
+        manualConfirmationState = "OPEN";
+    } else if (state == "CLOSED") {
+        Serial.println("🌐 MQTT CMD: CLOSING Door...");
+        currentDoorState = DOOR_CLOSING;
+        doorCycleStartTime = millis();
+        isMoving = true;
+        // Motor logic is handled in the state machine loop
+        pendingManualConfirmation = true;
+        manualConfirmationState = "CLOSED";
+    }
+}
 
 void initProximityScan() {
     String doorName = "DOOR_" + getUniqueDoorID();
@@ -78,6 +102,7 @@ void scanForCollar() {
         if (isAuthorized) {
             lastSeenRssi = device.getRSSI();
             lastSeenCollarTime = millis();
+            lastSeenCollarId = foundName.length() > 0 ? foundName : foundAddr;
             authorizedCollarFound = true;
             break; 
         }
@@ -90,6 +115,7 @@ void scanForCollar() {
         case DOOR_IDLE:
             if (authorizedCollarFound && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
                 Serial.println("🔓 Proximity Match! Starting Auto-Cycle...");
+                publishNotification("Pet Activity", "is detected at the door.", "INFO", lastSeenCollarId);
                 currentDoorState = DOOR_OPENING;
                 doorCycleStartTime = millis();
                 petHasPassed = false; // Reset for the new cycle
@@ -104,6 +130,11 @@ void scanForCollar() {
                 stopMotors();
                 currentDoorState = DOOR_WAITING;
                 waitingStartTime = millis(); // Set waiting start time
+
+                if (pendingManualConfirmation && manualConfirmationState == "OPEN") {
+                    publishDoorConfirmation("OPEN", true);
+                    pendingManualConfirmation = false;
+                }
             }
             break;
 
@@ -146,6 +177,12 @@ void scanForCollar() {
                 stopMotors();
                 isMoving = false;
                 currentDoorState = DOOR_IDLE;
+                publishNotification("Door Locked", "has been locked.", "INFO");
+
+                if (pendingManualConfirmation && manualConfirmationState == "CLOSED") {
+                    publishDoorConfirmation("CLOSED", true);
+                    pendingManualConfirmation = false;
+                }
             }
             break;
     }

@@ -34,6 +34,17 @@ void setPairingRequest(bool enable) {
     preferences.putBool("pairing_req", enable);
     preferences.end();
 }
+void setNewlyRegistered(bool b) {
+    preferences.begin("system", false);
+    preferences.putBool("new_reg", b);
+    preferences.end();
+}
+bool isNewlyRegistered() {
+    preferences.begin("system", true);
+    bool b = preferences.getBool("new_reg", false);
+    preferences.end();
+    return b;
+}
 String getMACAddress() {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);

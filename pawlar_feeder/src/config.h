@@ -23,4 +23,8 @@
 #define CHAR_CREDENTIALS_UUID  "2388432a-360e-4363-8025-055171736417"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
+// --- 📧 MQTT TOPICS ---
+#define TOPIC_FEEDER_STATUS  "pawlar/feeder/status"
+#define TOPIC_NOTIFICATIONS  "pawlar/feeder/notifications"
+
 #endif

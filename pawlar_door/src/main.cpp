@@ -147,6 +147,13 @@ void loop() {
     if (client.connected()) client.loop();
     checkIRActivity();
 
+    // 🚩 Periodic Battery Check (Every hour)
+    static unsigned long lastBatteryCheck = 0;
+    if (millis() - lastBatteryCheck > 3600000) {
+        lastBatteryCheck = millis();
+        reportBatteryHealth();
+    }
+
     bool btnUp = (digitalRead(BTN_UP) == LOW);
     bool btnDown = (digitalRead(BTN_DOWN) == LOW);
 

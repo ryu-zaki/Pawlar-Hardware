@@ -33,7 +33,10 @@
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 // --- 📧 MQTT TOPICS ---
-#define TOPIC_DOOR_LOGS  "pawlar/door/logs"     
-#define TOPIC_COMMANDS   "pawlar/collar/commands"
+#define TOPIC_DOOR_STATUS    "pawlar/door/status"
+#define TOPIC_DOOR_LOGS      "pawlar/door/logs"     
+#define TOPIC_COMMANDS       "pawlar/collar/commands"
+#define TOPIC_DOOR_CONTROLS  "pawlar/door/controls"
+#define TOPIC_NOTIFICATIONS  "pawlar/door/notifications"
 
 #endif

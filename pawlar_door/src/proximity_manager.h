@@ -2,6 +2,11 @@
 #define PROXIMITY_MANAGER_H
 #include <Arduino.h>
 
-void initProximityScan(); // <--- ADD THIS
-void scanForCollar();     // <--- ADD THIS
+enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
+
+extern String lastSeenCollarId;
+
+void initProximityScan();
+void scanForCollar();
+void handleRemoteCommand(String state); // Handle manual state changes from MQTT
 #endif
