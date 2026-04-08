@@ -34,15 +34,20 @@ void connectToCloud(String ssid, String pass) {
         String macAddr = getMACAddress();
         String clientId = "Pawlar-" + macAddr;
         String lwtTopic = TOPIC_STATUS;
-        String offlinePayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+        String deviceId = getUniqueDeviceID();
+        String offlinePayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+        String onlineStatusPayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"ONLINE\"}";
 
         String wifiStatusTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
 
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ MQTT Connected instantly!");
 
+            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
+
             // 1. Send specific WiFi confirmation for the App
-            String wifiPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"isConnected\": true}";
+            String wifiPayload = "{\"device_id\": \"" + deviceId + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
 

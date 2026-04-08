@@ -59,7 +59,7 @@ void scanForCollar() {
         if (millis() - lastDispenseTime > DISPENSE_COOLDOWN) {
             float target = getGramsPerServing();
             Serial.println("🐾 Authorized pet detected! Dispensing " + String(target) + "g food...");
-            servoManager.dispenseWeight(target, loadCellManager);
+            servoManager.dispenseWithBlockage(target, loadCellManager);
             publishFeederActivity("AUTO_DISPENSE", target);
             publishNotification("Food Dispensed", "successfully dispensed a meal.", "INFO", triggerId);
             lastDispenseTime = millis();

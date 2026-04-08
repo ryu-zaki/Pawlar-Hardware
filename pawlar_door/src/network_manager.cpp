@@ -121,6 +121,7 @@ void initNetwork() {
     String doorIdentity = getDeviceId(); 
     String lwtTopic = TOPIC_DOOR_STATUS;
     String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+    String onlineStatusPayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"ONLINE\"}";
 
     String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
     String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;
@@ -133,6 +134,9 @@ void initNetwork() {
         
         if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
+            
+            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
             
             // --- SUBSCRIBE TO RELEVANT TOPICS ---
             client.subscribe(linkedCollarsTopic.c_str()); 

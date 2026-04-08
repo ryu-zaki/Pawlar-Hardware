@@ -17,7 +17,7 @@ private:
     HX711 scale;
     int _dt_pin;
     int _sck_pin;
-    float _calibration_factor = 419.8; // Default, needs user calibration
+    float _calibration_factor = -419.8; // Flipped to negative to correct inverted mounting/wiring
 };
 
 #endif

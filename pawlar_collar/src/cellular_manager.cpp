@@ -186,6 +186,12 @@ bool isMQTTConnected() {
 bool sendCellularMQTT(float lat, float lng, int bat, int sats, String status) {
     if (WiFi.status() == WL_CONNECTED) return false;
 
+    // Only send if we have a valid fix to match the backend expectations
+    if (status != "LOCKED") {
+        Serial.println("🛰️ 4G: GPS Scanning (No Fix, skipping publish)");
+        return false;
+    }
+
     // Only connect if we aren't already
     if (!isMQTTConnected()) {
         Serial.println("\n🌍 4G: Establishing persistent link...");
@@ -197,7 +203,8 @@ bool sendCellularMQTT(float lat, float lng, int bat, int sats, String status) {
         Serial.println("✅ 4G: Link Established.");
     }
     
-    String payload = "{\"id\":\"" + getUniqueDeviceID() + "\",\"lat\":" + String(lat, 6) + ",\"lng\":" + String(lng, 6) + ",\"bat\":" + String(bat) + ",\"sats\":" + String(sats) + ",\"status\":\"" + status + "\"}";
+    // Corrected payload format for map display
+    String payload = "{\"device_id\":\"" + getUniqueDeviceID() + "\",\"coords\":{\"lat\":" + String(lat, 6) + ",\"long\":" + String(lng, 6) + "}}";
     String topic = String(TOPIC_GPS_PUB);
 
     cellSerial.println("AT+CMQTTTOPIC=0," + String(topic.length()));
@@ -209,13 +216,12 @@ bool sendCellularMQTT(float lat, float lng, int bat, int sats, String status) {
     cellSerial.println("AT+CMQTTPUB=0,1,60");
     
     if (waitForResponse("+CMQTTPUB: 0,0", 5000)) {
-        Serial.println("📤 4G: GPS Sent (" + status + ")");
+        Serial.println("📤 4G: GPS Sent (LOCKED)");
         return true;
     } else {
         Serial.println("⚠️ 4G: Publish Failed.");
         return false;
     }
-    // Note: We no longer call disconnectMQTTStack() here to keep the link alive
 }
 
 bool sendWifiStatusCellular(bool isConnected) {

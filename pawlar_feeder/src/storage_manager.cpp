@@ -5,37 +5,43 @@
 Preferences prefs;
 
 void saveCredentials(String ssid, String pass) {
-    prefs.begin("pawlar_f", false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("pass", pass);
-    prefs.end();
+    if (prefs.begin("pawlar_f", false)) {
+        prefs.putString("ssid", ssid);
+        prefs.putString("pass", pass);
+        prefs.end();
+    }
 }
 
 String getSSID() {
-    prefs.begin("pawlar_f", true);
-    String s = prefs.getString("ssid", ""); 
-    prefs.end();
+    String s = "";
+    if (prefs.begin("pawlar_f", true)) {
+        s = prefs.getString("ssid", ""); 
+        prefs.end();
+    }
     return s;
 }
 
 String getPass() {
-    prefs.begin("pawlar_f", true);
-    String p = prefs.getString("pass", ""); 
-    prefs.end();
+    String p = "";
+    if (prefs.begin("pawlar_f", true)) {
+        p = prefs.getString("pass", ""); 
+        prefs.end();
+    }
     return p;
 }
 
 String getDeviceId() {
-    prefs.begin("pawlar_f", false); // Open in read/write mode to save if missing
     String id = "";
-    if (prefs.isKey("device_id")) {
-        id = prefs.getString("device_id", "");
-    } else {
-        id = getUniqueFeederID();
-        prefs.putString("device_id", id);
-        Serial.println("🆔 Generated and saved new Device ID: " + id);
+    if (prefs.begin("pawlar_f", false)) {
+        if (prefs.isKey("device_id")) {
+            id = prefs.getString("device_id", "");
+        } else {
+            id = getUniqueFeederID();
+            prefs.putString("device_id", id);
+            Serial.println("🆔 Generated and saved new Device ID: " + id);
+        }
+        prefs.end();
     }
-    prefs.end();
     return id;
 }
 
@@ -50,42 +56,51 @@ String getUniqueFeederID() {
 
 void saveAuthorizedCollar(String collarList) {
     collarList.trim();
-    prefs.begin("pawlar_f", false);
-    prefs.putString("collar_list", collarList);
-    prefs.end();
+    if (prefs.begin("pawlar_f", false)) {
+        prefs.putString("collar_list", collarList);
+        prefs.end();
+    }
 }
 
 String getAuthorizedCollarList() {
-    prefs.begin("pawlar_f", true);
-    String list = prefs.getString("collar_list", ""); 
-    prefs.end();
+    String list = "";
+    if (prefs.begin("pawlar_f", true)) {
+        list = prefs.getString("collar_list", ""); 
+        prefs.end();
+    }
     return list; 
 }
 
 void saveGramsPerServing(float grams) {
-    prefs.begin("pawlar_f", false);
-    prefs.putFloat("grams_per", grams);
-    prefs.end();
+    if (prefs.begin("pawlar_f", false)) {
+        prefs.putFloat("grams_per", grams);
+        prefs.end();
+    }
 }
 
 float getGramsPerServing() {
-    prefs.begin("pawlar_f", true);
-    float grams = prefs.getFloat("grams_per", 200.0f);
-    prefs.end();
+    float grams = 20.0f;
+    if (prefs.begin("pawlar_f", true)) {
+        grams = prefs.getFloat("grams_per", 20.0f);
+        prefs.end();
+    }
     return grams;
 }
 
 bool isNewlyRegistered() {
-    prefs.begin("pawlar_f", true);
-    bool b = prefs.getBool("new_reg", false);
-    prefs.end();
+    bool b = false;
+    if (prefs.begin("pawlar_f", true)) {
+        b = prefs.getBool("new_reg", false);
+        prefs.end();
+    }
     return b;
 }
 
 void setNewlyRegistered(bool b) {
-    prefs.begin("pawlar_f", false);
-    prefs.putBool("new_reg", b);
-    prefs.end();
+    if (prefs.begin("pawlar_f", false)) {
+        prefs.putBool("new_reg", b);
+        prefs.end();
+    }
 }
 
 void clearStorage() {

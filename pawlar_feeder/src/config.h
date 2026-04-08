@@ -5,6 +5,7 @@
 // --- ⚙️ PINS ---
 #define BUTTON_PIN 4 
 #define SERVO_PIN  13
+#define BOWL_SERVO_PIN 27
 #define TRIG_PIN   5
 #define ECHO_PIN   18
 

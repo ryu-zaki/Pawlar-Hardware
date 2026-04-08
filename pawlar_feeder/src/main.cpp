@@ -13,12 +13,12 @@ String authorizedCollarsCache = "";
 TaskHandle_t BLETask;
 
 // Manager Instances
-ServoManager servoManager(SERVO_PIN);
+ServoManager servoManager(SERVO_PIN, BOWL_SERVO_PIN);
 UltrasonicManager ultrasonicManager(TRIG_PIN, ECHO_PIN);
 LoadCellManager loadCellManager(HX711_DT_PIN, HX711_SCK_PIN);
 
 unsigned long lastUpdate = 0;
-const unsigned long UPDATE_INTERVAL = 5000; // Check sensors every 5 seconds
+const unsigned long UPDATE_INTERVAL = 1000; // Check sensors every 1 second
 
 // --- Core 0 Task: Bluetooth Scanning ---
 void BLELoop(void * pvParameters) {
@@ -104,9 +104,10 @@ void loop() {
             // Wait for release
             while(digitalRead(BUTTON_PIN) == LOW) delay(10);
         } else {
+            // Independently trigger the managed cycle
             float target = getGramsPerServing();
-            Serial.println("Button Pressed! Manual Dispense (" + String(target) + "g target).");
-            servoManager.dispenseWeight(target, loadCellManager);
+            Serial.println("Button Pressed! Starting independent managed cycle (" + String(target) + "g).");
+            servoManager.dispenseWithBlockage(target, loadCellManager);
             publishFeederActivity("MANUAL_DISPENSE", target);
         }
         delay(500); // Debounce
@@ -118,7 +119,7 @@ void loop() {
         
         FeederState state = ultrasonicManager.getState();
         float distance = ultrasonicManager.getDistance();
-        float weight = loadCellManager.getWeight(5);
+        float weight = loadCellManager.getWeight(2); // Fewer samples for faster update
         
         Serial.print("Food Level: ");
         Serial.print(distance);

@@ -2,7 +2,7 @@
 #define PROXIMITY_MANAGER_H
 #include <Arduino.h>
 
-enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
+enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING, DOOR_OPEN };
 
 extern String lastSeenCollarId;
 

@@ -39,7 +39,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             } else if (command == "dispense") {
                 float target = doc["amount"] | getGramsPerServing();
                 Serial.println("🍖 Remote Command: Dispensing " + String(target) + "g...");
-                servoManager.dispenseWeight(target, loadCellManager);
+                servoManager.dispenseWithBlockage(target, loadCellManager);
                 publishFeederActivity("CMD_DISPENSE", target);
             } else if (command == "config") {
                 if (doc["grams_per_serving"].is<float>()) {
@@ -113,6 +113,7 @@ void initNetwork() {
     String feederIdentity = getDeviceId(); 
     String lwtTopic = TOPIC_FEEDER_STATUS;
     String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+    String onlineStatusPayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"ONLINE\"}";
 
     String wifiStatusTopic = "pawlar/feeder/wifi/" + feederIdentity;
     String linkedCollarsTopic = "pawlar/feeder/linked-collars/" + feederIdentity;
@@ -122,6 +123,9 @@ void initNetwork() {
         if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
+            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
+
             // Subscriptions
             client.subscribe(linkedCollarsTopic.c_str()); 
             client.subscribe("pawlar/feeder/sync");

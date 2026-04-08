@@ -62,7 +62,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     if (topicStr == TOPIC_BATTERY_SHARED) {
         if (message == "GET_BATTERY" || message == "REFRESH") {
             int batLevel = getBatteryPercentage();
-            String batPayload = "{\"id\": \"" + getUniqueDeviceID() + "\", \"bat\": " + String(batLevel) + "}";
+            String batPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(batLevel) + "}";
             client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
         }
     }
@@ -74,18 +74,20 @@ void mqtt_reconnect() {
         String clientId = "PawlarCollar-" + getUniqueDeviceID();
         Serial.print("Connecting to HiveMQ...");
 
-        String lwtTopic = TOPIC_NOTIFICATIONS;
-        JsonDocument lwtDoc;
-        lwtDoc["device_id"] = getUniqueDeviceID();
-        lwtDoc["device_type"] = "COLLAR";
-        lwtDoc["title"] = "Collar Offline";
-        lwtDoc["description"] = "went offline.";
-        lwtDoc["type"] = "WARNING";
-        String offlinePayload;
-        serializeJson(lwtDoc, offlinePayload);
+        String lwtTopic = TOPIC_STATUS;
+        String deviceId = getUniqueDeviceID();
+        
+        // Format matching backend StatusPayloadDto
+        String offlinePayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+        String onlinePayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"ONLINE\"}";
 
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ CONNECTED!");
+            
+            // 1. Tell backend we are ONLINE (Retained)
+            client.publish(lwtTopic.c_str(), onlinePayload.c_str(), true);
+
+            // 2. Send App Notifications
             publishNotification("Collar Online", "is now online.", "INFO");
             
             if (isNewlyRegistered()) {
@@ -187,12 +189,11 @@ void loop() {
             }
 
             if (hasFix()) {
-                String gpsPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"coords\": {\"lat\": " + String(getLat(), 6) + ", \"long\": " + String(getLng(), 6) + "}, \"sats\": " + String(getSatellites()) + ", \"status\": \"LOCKED\"}";
+                // Corrected payload format for map display
+                String gpsPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"coords\": {\"lat\": " + String(getLat(), 6) + ", \"long\": " + String(getLng(), 6) + "}}";
                 client.publish(TOPIC_GPS_PUB, gpsPayload.c_str());
                 Serial.println("📤 Sent GPS (WiFi): " + gpsPayload);
             } else {
-                String scanPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"status\": \"SCANNING\", \"sats\": " + String(getSatellites()) + "}";
-                client.publish(TOPIC_GPS_PUB, scanPayload.c_str());
                 Serial.println("🛰️ GPS Scanning (WiFi Active)");
             }
             lastSend = millis();
