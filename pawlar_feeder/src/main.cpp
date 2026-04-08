@@ -11,6 +11,7 @@
 // Global State
 String authorizedCollarsCache = "";
 TaskHandle_t BLETask;
+extern unsigned long lastDispenseTime;
 
 // Manager Instances
 ServoManager servoManager(SERVO_PIN, BOWL_SERVO_PIN);
@@ -104,11 +105,14 @@ void loop() {
             // Wait for release
             while(digitalRead(BUTTON_PIN) == LOW) delay(10);
         } else {
-            // Independently trigger the managed cycle
+            // Independently trigger the managed cycle (Always allowed)
             float target = getGramsPerServing();
-            Serial.println("Button Pressed! Starting independent managed cycle (" + String(target) + "g).");
-            servoManager.dispenseWithBlockage(target, loadCellManager);
-            publishFeederActivity("MANUAL_DISPENSE", target);
+            Serial.println("Button Pressed! Starting manual managed cycle (" + String(target) + "g).");
+            
+            if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
+                publishFeederActivity("MANUAL_DISPENSE", target);
+                lastDispenseTime = millis(); // 🚩 Reset the 3-hour interval for collars
+            }
         }
         delay(500); // Debounce
     }

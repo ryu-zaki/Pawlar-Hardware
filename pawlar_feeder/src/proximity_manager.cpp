@@ -11,7 +11,7 @@ extern LoadCellManager loadCellManager;
 
 // --- CONFIG ---
 const int RSSI_THRESHOLD_DISPENSE = -75; 
-const unsigned long DISPENSE_COOLDOWN = 30000; // 30 seconds cooldown between auto-dispenses
+const unsigned long DISPENSE_COOLDOWN = 3 * 3600 * 1000; // 3 hours in milliseconds (10,800,000ms)
 
 unsigned long lastDispenseTime = 0;
 

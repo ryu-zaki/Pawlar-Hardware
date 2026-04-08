@@ -6,20 +6,25 @@ LoadCellManager::LoadCellManager(int dt_pin, int sck_pin)
 void LoadCellManager::begin() {
     scale.begin(_dt_pin, _sck_pin);
     
-    Serial.println("⚖️ Initializing Load Cell...");
+    Serial.printf("⚖️ Initializing HX711 (DT:%d, SCK:%d)...\n", _dt_pin, _sck_pin);
     
-    // Give it a longer moment to stabilize power
-    delay(1000); 
+    // Safety check for pins
+    if (_dt_pin == 0 || _sck_pin == 0) {
+        Serial.println("❌ ERROR: Pins not defined! Check config.h");
+        return;
+    }
 
-    if (scale.wait_ready_timeout(5000)) { // Increased timeout to 5s
+    if (scale.wait_ready_timeout(5000)) { 
         scale.set_scale(_calibration_factor);
         
-        // More tares for better stability
-        Serial.println("⚖️ Taring...");
+        Serial.println("⚖️ Stabilization...");
+        delay(500); // 0.5s settle time
+
+        Serial.println("⚖️ Taring bowl (30 samples)...");
         scale.tare(30); 
-        Serial.println("✅ Load Cell Ready and Tared.");
+        Serial.printf("✅ Ready! Factor: %.2f\n", _calibration_factor);
     } else {
-        Serial.println("❌ HX711 not found. Check DT/SCK wiring!");
+        Serial.println("❌ HX711 not found. Pins correct? Is VCC 5V?");
     }
 }
 

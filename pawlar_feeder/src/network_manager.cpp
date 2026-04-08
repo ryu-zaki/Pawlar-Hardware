@@ -11,6 +11,7 @@
 extern String authorizedCollarsCache; 
 extern LoadCellManager loadCellManager;
 extern ServoManager servoManager;
+extern unsigned long lastDispenseTime;
 
 WiFiClientSecure feederWifiClient;
 PubSubClient client(feederWifiClient);
@@ -39,8 +40,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
             } else if (command == "dispense") {
                 float target = doc["amount"] | getGramsPerServing();
                 Serial.println("🍖 Remote Command: Dispensing " + String(target) + "g...");
-                servoManager.dispenseWithBlockage(target, loadCellManager);
-                publishFeederActivity("CMD_DISPENSE", target);
+                if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
+                    publishFeederActivity("CMD_DISPENSE", target);
+                    lastDispenseTime = millis(); // 🚩 Reset the 3-hour interval for collars
+                }
             } else if (command == "config") {
                 if (doc["grams_per_serving"].is<float>()) {
                     float g = doc["grams_per_serving"].as<float>();

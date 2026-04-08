@@ -55,15 +55,23 @@ bool ServoManager::dispenseWeight(float targetGrams, LoadCellManager& loadCell, 
     }
 
     // Drift correction: if it's slightly negative, we treat it as 0 for relative calculation
-    if (initialWeight < -20.0) {
+    if (initialWeight < -2.0) { // More precise drift check
         Serial.printf("⚠️ SCALE DRIFT DETECTED: %.2fg. Taring and continuing...\n", initialWeight);
         loadCell.tare();
         initialWeight = 0;
     }
 
-    Serial.printf("⚖️ Weight Check: %.2fg | Target Add: %.2fg\n", initialWeight, targetGrams);
+    // 🚩 REFILL LOGIC: targetGrams is the desired final bowl weight
+    if (initialWeight >= targetGrams) {
+        Serial.printf("✅ BOWL FULL: Current weight (%.2fg) >= Target (%.2fg). No dispense needed.\n", initialWeight, targetGrams);
+        if (closeAtEnd) closeDispenser();
+        return true; 
+    }
+
+    float toDispense = targetGrams - initialWeight;
+    Serial.printf("⚖️ Weight Check: %.2fg | Refilling to: %.2fg (Adding: %.2fg)\n", initialWeight, targetGrams, toDispense);
     
-    float targetWeight = initialWeight + targetGrams;
+    float targetWeight = targetGrams; // Dispense until we reach this total weight
     float currentWeight = initialWeight;
     unsigned long startTime = millis();
     const unsigned long timeout = 60000; // 60s safety timeout
@@ -78,8 +86,8 @@ bool ServoManager::dispenseWeight(float targetGrams, LoadCellManager& loadCell, 
         }
         
         delay(500); // Wait 0.5s for scale to settle
-        currentWeight = loadCell.getWeight(10); // More samples for accuracy during dispense
-        Serial.printf("📈 Adding... Current Weight: %.2fg | Goal: %.2fg\n", currentWeight, targetWeight);
+        currentWeight = loadCell.getWeight(10); 
+        Serial.printf("📈 Refilling... Current Weight: %.2fg | Goal: %.2fg\n", currentWeight, targetWeight);
     }
 
     Serial.println("✅ Target weight reached.");

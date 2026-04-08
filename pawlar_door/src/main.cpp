@@ -175,26 +175,23 @@ void loop() {
     }
 
     // 2. Individual Manual Button Reading
-    if (btnUp || btnDown) {
-        manualActionInProgress = true; 
-        isMoving = true; 
+    if ((btnUp || btnDown) && !isMoving) {
         if (btnUp) {
-            moveUp();
+            handleRemoteCommand("OPEN");
             handleManualActivityLog("MANUAL_UP");
         }
         else if (btnDown) {
-            moveDown();
+            handleRemoteCommand("CLOSED");
             handleManualActivityLog("MANUAL_DOWN");
         }
+        // Small debounce delay
+        delay(200);
         return;
     }
 
-    // 3. Idle Logic (Manual Override Handling)
+    // 3. Idle Logic (Manual Override Handling) - No longer needed for stopMotors() as state machine handles it
     if (!btnUp && !btnDown) {
-        if (manualActionInProgress) {
-            Serial.println("🛑 Manual Button Released: Stopping Motors.");
-            stopMotors();
-            isMoving = false;
+        if (manualActionInProgress && !isMoving) {
             manualActionInProgress = false;
         }
     }

@@ -39,19 +39,35 @@ String manualConfirmationState = "";
 bool manualOverrideActive = false; // Flag to disable auto-close
 
 void handleRemoteCommand(String state) {
+    // 🚩 BLOCKADE: Finish the 10-second process first before accepting new commands
+    if (currentDoorState == DOOR_OPENING || currentDoorState == DOOR_CLOSING) {
+        Serial.println("🚫 BUSY: Command Ignored. Waiting for current process to finish.");
+        return; 
+    }
+
     if (state == "OPEN") {
+        // 🚩 REDUNDANCY CHECK: Don't open if already open
+        if (currentDoorState == DOOR_OPEN || (currentDoorState == DOOR_WAITING && currentPositionMs >= TRAVEL_TIME)) {
+            Serial.println("ℹ️ Door is already OPEN. Command Ignored.");
+            return;
+        }
         Serial.println("🌐 MQTT CMD: OPENing Door (Manual Override)...");
         currentDoorState = DOOR_OPENING;
         isMoving = true;
-        manualOverrideActive = true; // Stay open until further notice
+        manualOverrideActive = true; // Stay open until further notice (manual controls)
         moveUp();
         pendingManualConfirmation = true;
         manualConfirmationState = "OPEN";
     } else if (state == "CLOSED") {
+        // 🚩 REDUNDANCY CHECK: Don't close if already closed
+        if (currentDoorState == DOOR_IDLE && currentPositionMs == 0) {
+            Serial.println("ℹ️ Door is already CLOSED. Command Ignored.");
+            return;
+        }
         Serial.println("🌐 MQTT CMD: CLOSING Door (Manual Override)...");
         currentDoorState = DOOR_CLOSING;
         isMoving = true;
-        manualOverrideActive = false; // Reset override when closing
+        manualOverrideActive = false; // Reset override when manually closing
         moveDown();
         pendingManualConfirmation = true;
         manualConfirmationState = "CLOSED";
@@ -128,6 +144,7 @@ void scanForCollar() {
             if (currentPositionMs >= TRAVEL_TIME) {
                 currentPositionMs = TRAVEL_TIME;
                 stopMotors();
+                isMoving = false; // 🚩 RELEASE BLOCKADE: Door is now stationary
                 
                 if (manualOverrideActive) {
                     Serial.println("🛑 Manual Open Complete. Holding state.");
@@ -153,6 +170,7 @@ void scanForCollar() {
             // IF manual override is active, we NEVER auto-close from this state.
             if (manualOverrideActive) {
                 currentDoorState = DOOR_OPEN;
+                isMoving = false; 
                 return;
             }
 
@@ -160,21 +178,25 @@ void scanForCollar() {
             if (petHasPassed) {
                 Serial.println("🐾 Pet has passed. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
             // Condition 2: Collar is gone (either out of RSSI range or timed out)
             else if (millis() - lastSeenCollarTime > COLLAR_TIMEOUT || lastSeenRssi < RSSI_THRESHOLD_CLOSE) {
                 Serial.println("📡 Collar out of range. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
             // Condition 3: Waiting time elapsed
             else if (millis() - waitingStartTime >= WAITING_TIMEOUT) {
                 Serial.println("⏳ Waiting time elapsed. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
             break;
 
         case DOOR_OPEN:
             currentPositionMs = TRAVEL_TIME;
+            isMoving = false; // 🚩 Ensure blockade is released
             // Stay here until a manual CLOSE command or physical button press changes the state
             break;
 
@@ -187,10 +209,12 @@ void scanForCollar() {
                     currentPositionMs = 0;
                 }
             } else {
+                // 🚩 SAFETY REVERSAL: Obstacle detected!
                 stopMotors();
-                Serial.println("⚠️ OBSTACLE! Pausing close.");
-                currentDoorState = DOOR_WAITING;
-                waitingStartTime = millis(); 
+                Serial.println("⚠️ OBSTACLE! Reversing to OPEN position for safety.");
+                currentDoorState = DOOR_OPENING; 
+                isMoving = true;
+                moveUp(); 
                 return;
             }
 
