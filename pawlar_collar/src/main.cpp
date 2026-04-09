@@ -196,7 +196,7 @@ void loop() {
             }
 
             if (bat <= 25 && !lowBatteryNotified) {
-                publishNotification("Collar Battery Low", "battery is low. Please charge it soon.", "WARNING");
+                publishNotification("Battery Low", "battery is low. Please charge it soon.", "WARNING");
                 lowBatteryNotified = true;
             } else if (bat > 25) {
                 lowBatteryNotified = false;

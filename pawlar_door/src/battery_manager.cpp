@@ -56,7 +56,7 @@ void reportBatteryHealth() {
     }
 
     if (batPercent <= 25 && !doorLowBatteryNotified) {
-        publishNotification("Door Battery Low", "battery is low. Please check the power source.", "WARNING");
+        publishNotification("Battery Low", "battery is low. Please check the power source.", "WARNING");
         doorLowBatteryNotified = true;
     } else if (batPercent > 25) {
         doorLowBatteryNotified = false;

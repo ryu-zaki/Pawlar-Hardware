@@ -35,6 +35,7 @@ void connectToCloud(String ssid, String pass) {
         String clientId = "Pawlar-" + macAddr;
         String lwtTopic = TOPIC_STATUS;
         String deviceId = getUniqueDeviceID();
+        
         String offlinePayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
         String onlineStatusPayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"ONLINE\"}";
 
@@ -43,15 +44,15 @@ void connectToCloud(String ssid, String pass) {
         if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ MQTT Connected instantly!");
 
-            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
-            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
+            // --- PUBLISH ONLINE STATUS (Retained for App Modal) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); 
 
             // 1. Send specific WiFi confirmation for the App
             String wifiPayload = "{\"device_id\": \"" + deviceId + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
 
-            // 2. Send Online Notification
+            // 2. Send Online Notification (Stored in Notification Tab)
             publishNotification("Collar Online", "is now online.", "INFO");
 
             if (isNewlyRegistered()) {

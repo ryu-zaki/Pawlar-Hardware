@@ -31,10 +31,10 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLE(bool isPairing) {
-    String deviceName = "COLLAR_" + getUniqueDeviceID(); 
+    String deviceName = getUniqueDeviceID(); 
 
     if (isPairing) {
-        deviceName += " Setup"; 
+        deviceName = "COLLAR_" + deviceName + " Setup"; 
     }
 
     BLEDevice::init(deviceName.c_str());

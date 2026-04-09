@@ -71,6 +71,7 @@ void handleRemoteCommand(String state) {
         moveDown();
         pendingManualConfirmation = true;
         manualConfirmationState = "CLOSED";
+        publishNotification("Door Locked", "has been locked.", "INFO");
     }
 }
 
@@ -104,6 +105,9 @@ void scanForCollar() {
     BLEScanResults foundDevices = pBLEScan->start(1, false);
 
     bool authorizedCollarFound = false;
+    int maxRssi = -100; // Track the strongest signal
+    String strongestCollarId = "";
+
     for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
         String foundName = device.getName().c_str();
@@ -115,14 +119,21 @@ void scanForCollar() {
         if (authList.indexOf(foundAddr) != -1) isAuthorized = true;
 
         if (isAuthorized) {
-            lastSeenRssi = device.getRSSI();
-            lastSeenCollarTime = millis();
-            lastSeenCollarId = foundName.length() > 0 ? foundName : foundAddr;
+            int currentRssi = device.getRSSI();
+            if (currentRssi > maxRssi) {
+                maxRssi = currentRssi;
+                strongestCollarId = foundName.length() > 0 ? foundName : foundAddr;
+            }
             authorizedCollarFound = true;
-            break; 
         }
     }
     pBLEScan->clearResults();
+
+    if (authorizedCollarFound) {
+        lastSeenRssi = maxRssi;
+        lastSeenCollarTime = millis();
+        lastSeenCollarId = strongestCollarId;
+    }
 
 
     // --- AUTOMATION STATE MACHINE ---
@@ -131,7 +142,6 @@ void scanForCollar() {
             currentPositionMs = 0;
             if (authorizedCollarFound && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
                 Serial.println("🔓 Proximity Match! Starting Auto-Cycle...");
-                publishNotification("Pet Activity", "is detected at the door.", "INFO", lastSeenCollarId);
                 currentDoorState = DOOR_OPENING;
                 petHasPassed = false; // Reset for the new cycle
                 isMoving = true;
@@ -154,6 +164,8 @@ void scanForCollar() {
                     currentDoorState = DOOR_WAITING;
                     waitingStartTime = millis();
                 }
+
+                publishNotification("Door Opened", "has been opened.", "INFO");
 
                 if (pendingManualConfirmation && manualConfirmationState == "OPEN") {
                     publishDoorConfirmation("OPEN", true);
@@ -224,7 +236,7 @@ void scanForCollar() {
                 stopMotors();
                 isMoving = false;
                 currentDoorState = DOOR_IDLE;
-                publishNotification("Door Locked", "has been locked.", "INFO");
+                publishNotification("Door Closed", "has been closed.", "INFO");
 
                 if (pendingManualConfirmation && manualConfirmationState == "CLOSED") {
                     publishDoorConfirmation("CLOSED", true);

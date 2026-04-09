@@ -14,14 +14,20 @@ void saveCredentials(String ssid, String pass) {
 
 String getSSID() {
     prefs.begin("pawlar", true);
-    String s = prefs.getString("ssid", ""); 
+    String s = "";
+    if (prefs.isKey("ssid")) {
+        s = prefs.getString("ssid", ""); 
+    }
     prefs.end();
     return s;
 }
 
 String getPass() {
     prefs.begin("pawlar", true);
-    String p = prefs.getString("pass", ""); 
+    String p = "";
+    if (prefs.isKey("pass")) {
+        p = prefs.getString("pass", ""); 
+    }
     prefs.end();
     return p;
 }

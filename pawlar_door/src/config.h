@@ -14,6 +14,11 @@
 #define BTN_UP 18
 #define BTN_DOWN 19
 
+// --- 💡 RGB LED PINS ---
+#define LED_RED   5
+#define LED_GREEN 17
+#define LED_BLUE  23
+
 // --- 👁️ SENSOR PINS ---
 #define IR_INSIDE_PIN  13
 #define IR_OUTSIDE_PIN 16 

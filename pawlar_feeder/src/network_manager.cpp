@@ -153,8 +153,13 @@ void initNetwork() {
     
     String feederIdentity = getDeviceId(); 
     String lwtTopic = TOPIC_FEEDER_STATUS;
+
+    // 🚩 Keep original LWT for Status/Modal
     String offlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
     String onlineStatusPayload = "{\"device_id\": \"" + feederIdentity + "\", \"message\": \"ONLINE\"}";
+
+    // 📝 Notification structure for Reference
+    // String offlineNotification = "{\"device_id\": \"" + feederIdentity + "\", \"device_type\": \"FEEDER\", \"title\": \"Feeder Offline\", \"description\": \"went offline.\", \"type\": \"WARNING\"}";
 
     String wifiStatusTopic = "pawlar/feeder/wifi/" + feederIdentity;
     String linkedCollarsTopic = "pawlar/feeder/linked-collars/" + feederIdentity;
@@ -164,8 +169,8 @@ void initNetwork() {
         if (client.connect(feederIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
             
-            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
-            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
+            // --- PUBLISH ONLINE STATUS (Retained for App Modal) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); 
 
             // Subscriptions
             client.subscribe(linkedCollarsTopic.c_str()); 
@@ -183,7 +188,7 @@ void initNetwork() {
             String onlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
 
-            // Send Online Notification
+            // Send Online Notification (Stored in Notification Tab)
             publishNotification("Feeder Online", "is now online.", "INFO");
 
             if (isNewlyRegistered()) {

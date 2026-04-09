@@ -64,6 +64,7 @@ void checkIRActivity() {
                 if (bothSensorsBlocked) {
                     Serial.println("✅ SUCCESS: PET FULLY ENTERED");
                     publishDoorActivity("PET_GOING_IN", 0.0);
+                    publishNotification("Pet Went Inside", "detected moving inside the house.", "INFO", lastSeenCollarId);
                     petHasPassed = true; // Signal that the pet has passed
                 }
                 currentPath = IDLE;

@@ -120,8 +120,13 @@ void initNetwork() {
     
     String doorIdentity = getDeviceId(); 
     String lwtTopic = TOPIC_DOOR_STATUS;
+    
+    // 🚩 Keep original LWT for Status/Modal
     String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
     String onlineStatusPayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"ONLINE\"}";
+
+    // 📝 Notification structure for Reference
+    // String offlineNotification = "{\"device_id\": \"" + doorIdentity + "\", \"device_type\": \"DOOR\", \"title\": \"Door Offline\", \"description\": \"went offline.\", \"type\": \"WARNING\"}";
 
     String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
     String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;

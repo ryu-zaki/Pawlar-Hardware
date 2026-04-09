@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "config.h"
 #include "storage_manager.h"
 #include "network_manager.h"
@@ -15,12 +16,45 @@ String authorizedCollarsCache = "";
 unsigned long dualPressStartTime = 0;
 bool isDualPressing = false;
 bool manualActionInProgress = false; // Track if the door is moving due to manual button press
+bool isRegisteredCached = false; // 🚩 Cache for NVS SSID check
 
 // --- Function Prototypes ---
 void stopMotors();
 void moveUp();
 void moveDown();
 void handleManualActivityLog(String event);
+void updateLEDState();
+
+// --- RGB LED Logic ---
+void setLED(bool r, bool g, bool b) {
+    digitalWrite(LED_RED, r ? HIGH : LOW);
+    digitalWrite(LED_GREEN, g ? HIGH : LOW);
+    digitalWrite(LED_BLUE, b ? HIGH : LOW);
+}
+
+void updateLEDState() {
+    static unsigned long lastBlink = 0;
+    static bool blinkState = false;
+
+    // 1. Not Registered/No WiFi saved -> SOLID RED
+    if (!isRegisteredCached) {
+        setLED(true, false, false);
+        return;
+    }
+
+    // 2. Connecting (WiFi connecting or MQTT connecting) -> BLINK GREEN
+    if (WiFi.status() != WL_CONNECTED || !client.connected()) {
+        if (millis() - lastBlink > 500) {
+            lastBlink = millis();
+            blinkState = !blinkState;
+            setLED(false, blinkState, false);
+        }
+    } 
+    // 3. Fully Connected -> SOLID GREEN
+    else {
+        setLED(false, true, false);
+    }
+}
 
 // --- Core 0 Task: Bluetooth Scanning ---
 void BLELoop(void * pvParameters) {
@@ -91,8 +125,15 @@ void setup() {
     // Initialize Pins
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
+    pinMode(LED_RED, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+    
     pinMode(MOT_A_IN1, OUTPUT); pinMode(MOT_A_IN2, OUTPUT); pinMode(MOT_A_ENA, OUTPUT);
     pinMode(MOT_B_IN3, OUTPUT); pinMode(MOT_B_IN4, OUTPUT); pinMode(MOT_B_ENB, OUTPUT);
+
+    // Initial LED state
+    setLED(true, false, false); // Default to RED until logic takes over
 
     // 🚩 FACTORY RESET CHECK: Hold UP + DOWN buttons for 3 seconds at boot
     if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
@@ -112,6 +153,7 @@ void setup() {
 
     String ssid = getSSID();
     String pass = getPass();
+    isRegisteredCached = (ssid != ""); // 🚩 Set the cache for the LED logic
 
     authorizedCollarsCache = getAuthorizedCollarList(); 
     Serial.println("📋 Loaded Authorized Collars: " + authorizedCollarsCache);
@@ -144,6 +186,7 @@ void setup() {
 // ... (Keep includes and definitions the same)
 
 void loop() {
+    updateLEDState();
     if (client.connected()) client.loop();
     checkIRActivity();
 
