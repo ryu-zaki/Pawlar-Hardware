@@ -152,6 +152,9 @@ void initNetwork() {
             client.subscribe(TOPIC_DOOR_CONTROLS);
             Serial.println("👂 Subscribed to: " + String(TOPIC_DOOR_CONTROLS));
 
+            client.subscribe(TOPIC_BATTERY);
+            Serial.println("👂 Subscribed to: " + String(TOPIC_BATTERY));
+
             String onlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
             Serial.println("📤 Published Status: " + onlinePayload);
@@ -202,11 +205,11 @@ void logTriggerEvent(int rssi, double distance) {
 
 void publishBatteryHealth(float voltage, float current, int percentage) {
     String deviceId = getDeviceId();
-    String payload = "{\"device\":\"" + deviceId + "\", \"type\":\"HEALTH\", \"voltage\":" + String(voltage, 2) + 
-                     ", \"battery\":" + String(percentage) + "}";
+    String payload = "{\"device_id\": \"" + deviceId + "\", \"battery_level\": " + String(percentage) + "}";
     
     if (client.connected()) {
-        client.publish("pawlar/door/activity", payload.c_str());
+        client.publish(TOPIC_BATTERY, payload.c_str());
+        Serial.println("📤 Published Battery: " + payload);
     }
 }
 

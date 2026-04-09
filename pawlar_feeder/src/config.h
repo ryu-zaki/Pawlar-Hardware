@@ -26,6 +26,7 @@
 
 // --- 📧 MQTT TOPICS ---
 #define TOPIC_FEEDER_STATUS  "pawlar/feeder/status"
-#define TOPIC_NOTIFICATIONS  "pawlar/feeder/notifications"
-
+#define TOPIC_FEEDER_NOTIFICATIONS "pawlar/feeder/notifications"
+#define TOPIC_FEEDER_GRAMS   "pawlar/feeder/grams"
+#define TOPIC_FEEDER_CONTROLS "pawlar/feeder/controls"
 #endif

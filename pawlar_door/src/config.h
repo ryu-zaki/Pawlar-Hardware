@@ -38,5 +38,6 @@
 #define TOPIC_COMMANDS       "pawlar/collar/commands"
 #define TOPIC_DOOR_CONTROLS  "pawlar/door/controls"
 #define TOPIC_NOTIFICATIONS  "pawlar/door/notifications"
+#define TOPIC_BATTERY        "pawlar/door/battery"
 
 #endif

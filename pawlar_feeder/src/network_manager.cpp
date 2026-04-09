@@ -28,6 +28,44 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     String mySyncTopic = "pawlar/feeder/" + myId + "/sync";
     String myCmdTopic = "pawlar/feeder/" + myId + "/cmd";
 
+    // --- HANDLE FEEDER CONTROLS (App Manual Dispense) ---
+    if (topicStr == TOPIC_FEEDER_CONTROLS) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            String command = doc["command"].as<String>();
+            String deviceId = doc["device_id"].as<String>();
+            bool confirmed = doc["confirmed"] | false;
+
+            if (deviceId == myId && command == "FEED" && !confirmed) {
+                float target = getGramsPerServing();
+                Serial.println("📱 App Command: FEEDing " + String(target) + "g...");
+                
+                if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
+                    publishFeederConfirmation("FEED", target, true);
+                    lastDispenseTime = millis(); // Reset 3-hour interval
+                }
+            }
+        }
+        return;
+    }
+
+    // --- HANDLE GRAMS CONFIGURATION ---
+    if (topicStr == TOPIC_FEEDER_GRAMS) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            String deviceId = doc["device_id"].as<String>();
+            if (deviceId == myId) {
+                float amount = doc["amount"].as<float>();
+                saveGramsPerServing(amount);
+                Serial.println("⚙️ Grams Config: Updated Serving Size to " + String(amount) + "g");
+                publishFeederActivity("GRAMS_UPDATED", amount);
+            }
+        }
+        return;
+    }
+
     if (topicStr == myCmdTopic) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, message);
@@ -136,6 +174,12 @@ void initNetwork() {
             client.subscribe(cmdTopic.c_str());
             Serial.println("📡 Subscribed to: " + cmdTopic);
 
+            client.subscribe(TOPIC_FEEDER_GRAMS);
+            Serial.println("📡 Subscribed to: " + String(TOPIC_FEEDER_GRAMS));
+
+            client.subscribe(TOPIC_FEEDER_CONTROLS);
+            Serial.println("📡 Subscribed to: " + String(TOPIC_FEEDER_CONTROLS));
+
             String onlinePayload = "{\"device_id\": \"" + feederIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
 
@@ -162,6 +206,17 @@ void publishFeederActivity(String event, float data) {
     }
 }
 
+void publishFeederConfirmation(String command, float amount, bool confirmed) {
+    String deviceId = getDeviceId();
+    String confStr = confirmed ? "true" : "false";
+    String payload = "{\"command\": \"" + command + "\", \"device_id\": \"" + deviceId + "\", \"amount\": " + String(amount, 1) + ", \"confirmed\": " + confStr + "}";
+    
+    if (client.connected()) {
+        client.publish(TOPIC_FEEDER_CONTROLS, payload.c_str());
+        Serial.println("📤 Published Confirmation: " + payload);
+    }
+}
+
 void publishNotification(String title, String description, String type, String trigger_id) {
     if (!client.connected()) return;
 
@@ -177,6 +232,6 @@ void publishNotification(String title, String description, String type, String t
 
     String payload;
     serializeJson(doc, payload);
-    client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
+    client.publish(TOPIC_FEEDER_NOTIFICATIONS, payload.c_str());
     Serial.println("📤 Published Notification: " + payload);
 }

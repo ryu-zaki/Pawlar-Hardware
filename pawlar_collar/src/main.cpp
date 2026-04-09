@@ -31,10 +31,11 @@ bool pairingMode = false;
 volatile bool btnPressed = false;
 unsigned long lastSend = 0; 
 bool lowBatteryNotified = false;
+int lastReportedPercent = -1; // 🚩 Track last sent value to avoid spam
 
 void IRAM_ATTR isr() { btnPressed = true; }
 
-// --- 🔋 BATTERY FUNCTION (10% Increments) ---
+// --- 🔋 BATTERY FUNCTION (Quantized 25/50/75/100) ---
 int getBatteryPercentage() {
     long sum = 0;
     int samples = 50; 
@@ -46,8 +47,12 @@ int getBatteryPercentage() {
     float voltage = (averageAdc / 4095.0) * 3.3 * VOLTAGE_DIVIDER;
     int percentage = map(voltage * 100, MIN_BAT_V * 100, MAX_BAT_V * 100, 0, 100);
     percentage = constrain(percentage, 0, 100);
-    percentage = (percentage / 10) * 10; 
-    return percentage;
+    
+    // 🚩 QUANTIZATION LOGIC
+    if (percentage <= 25) return 25;
+    if (percentage <= 50) return 50;
+    if (percentage <= 75) return 75;
+    return 100;
 }
 
 // --- 🎧 MQTT CALLBACK ---
@@ -64,6 +69,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
             int batLevel = getBatteryPercentage();
             String batPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(batLevel) + "}";
             client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
+            lastReportedPercent = batLevel; // Sync last reported
         }
     }
 }
@@ -181,7 +187,15 @@ void loop() {
         if (millis() - lastSend > SEND_INTERVAL) {
             int bat = getBatteryPercentage();
             
-            if (bat <= 20 && !lowBatteryNotified) {
+            // 🚩 Only publish to App if the quantized percentage has changed
+            if (bat != lastReportedPercent) {
+                String batPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(bat) + "}";
+                client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
+                lastReportedPercent = bat;
+                Serial.printf("📤 Published Quantized Battery: %d%%\n", bat);
+            }
+
+            if (bat <= 25 && !lowBatteryNotified) {
                 publishNotification("Collar Battery Low", "battery is low. Please charge it soon.", "WARNING");
                 lowBatteryNotified = true;
             } else if (bat > 25) {
