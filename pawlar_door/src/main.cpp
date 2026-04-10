@@ -36,13 +36,29 @@ void updateLEDState() {
     static unsigned long lastBlink = 0;
     static bool blinkState = false;
 
-    // 1. Not Registered/No WiFi saved -> SOLID RED
+    // 🚩 1. Low Battery Warning (Blinking RED) - Priority 1
+    if (isBatteryLow()) {
+        if (millis() - lastBlink > 500) {
+            lastBlink = millis();
+            blinkState = !blinkState;
+            setLED(blinkState, false, false);
+        }
+        return;
+    }
+
+    // 🚩 2. Moving State (BLUE) - Priority 2
+    if (isMoving) {
+        setLED(false, false, true);
+        return;
+    }
+
+    // 🚩 3. Not Registered/No WiFi saved -> SOLID RED
     if (!isRegisteredCached) {
         setLED(true, false, false);
         return;
     }
 
-    // 2. Connecting (WiFi connecting or MQTT connecting) -> BLINK GREEN
+    // 🚩 4. Connecting (WiFi connecting or MQTT connecting) -> BLINK GREEN
     if (WiFi.status() != WL_CONNECTED || !client.connected()) {
         if (millis() - lastBlink > 500) {
             lastBlink = millis();
@@ -50,7 +66,7 @@ void updateLEDState() {
             setLED(false, blinkState, false);
         }
     } 
-    // 3. Fully Connected -> SOLID GREEN
+    // 🚩 5. Fully Connected -> SOLID GREEN
     else {
         setLED(false, true, false);
     }

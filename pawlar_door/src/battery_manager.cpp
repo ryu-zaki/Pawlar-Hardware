@@ -56,9 +56,23 @@ void reportBatteryHealth() {
     }
 
     if (batPercent <= 25 && !doorLowBatteryNotified) {
-        publishNotification("Battery Low", "battery is low. Please check the power source.", "WARNING");
+        publishNotification("Battery Low", "battery is low. Please check the power source.", "WARNING", "");
         doorLowBatteryNotified = true;
     } else if (batPercent > 25) {
         doorLowBatteryNotified = false;
     }
+}
+
+bool isBatteryLow() {
+    static bool cachedStatus = false;
+    static unsigned long lastCheck = 0;
+    
+    // Only check every 5 seconds to save CPU
+    if (millis() - lastCheck > 5000 || lastCheck == 0) {
+        lastCheck = millis();
+        float voltage = getVoltage();
+        int batPercent = calculateBatteryPercentage(voltage);
+        cachedStatus = (batPercent <= 25);
+    }
+    return cachedStatus;
 }
