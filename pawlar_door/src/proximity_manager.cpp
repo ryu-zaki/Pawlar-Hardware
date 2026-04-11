@@ -85,10 +85,6 @@ void initProximityScan() {
 }
 
 void scanForCollar() {
-    unsigned long now = millis();
-    unsigned long dt = (lastUpdateTime == 0) ? 0 : now - lastUpdateTime;
-    lastUpdateTime = now;
-
     String authList = authorizedCollarsCache;
     if (authList == "") {
         return;
@@ -134,13 +130,19 @@ void scanForCollar() {
         lastSeenCollarTime = millis();
         lastSeenCollarId = strongestCollarId;
     }
+}
 
+void updateDoorAutomation() {
+    unsigned long now = millis();
+    unsigned long dt = (lastUpdateTime == 0) ? 0 : now - lastUpdateTime;
+    lastUpdateTime = now;
 
     // --- AUTOMATION STATE MACHINE ---
     switch (currentDoorState) {
         case DOOR_IDLE:
             currentPositionMs = 0;
-            if (authorizedCollarFound && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
+            // Only trigger auto-open if we are NOT in provisioning mode (i.e., we have authorized collars)
+            if (authorizedCollarsCache != "" && (millis() - lastSeenCollarTime < COLLAR_TIMEOUT) && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
                 Serial.println("🔓 Proximity Match! Starting Auto-Cycle...");
                 currentDoorState = DOOR_OPENING;
                 petHasPassed = false; // Reset for the new cycle

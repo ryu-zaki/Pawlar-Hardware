@@ -12,6 +12,8 @@
 String authorizedCollarsCache = "";
 TaskHandle_t BLETask;
 extern unsigned long lastDispenseTime;
+bool isRegisteredCached = false;
+volatile bool isDispensing = false;
 
 // Manager Instances
 ServoManager servoManager(SERVO_PIN, BOWL_SERVO_PIN);
@@ -20,6 +22,43 @@ LoadCellManager loadCellManager(HX711_DT_PIN, HX711_SCK_PIN);
 
 unsigned long lastUpdate = 0;
 const unsigned long UPDATE_INTERVAL = 1000; // Check sensors every 1 second
+
+// --- RGB LED Logic ---
+void setLED(bool r, bool g, bool b) {
+    digitalWrite(LED_RED, r ? HIGH : LOW);
+    digitalWrite(LED_GREEN, g ? HIGH : LOW);
+    digitalWrite(LED_BLUE, b ? HIGH : LOW);
+}
+
+void updateLEDState() {
+    static unsigned long lastBlink = 0;
+    static bool blinkState = false;
+
+    // 🚩 1. Dispensing State (BLUE) - Priority 1
+    if (isDispensing) {
+        setLED(false, false, true);
+        return;
+    }
+
+    // 🚩 2. Not Registered/No WiFi saved -> SOLID RED
+    if (!isRegisteredCached) {
+        setLED(true, false, false);
+        return;
+    }
+
+    // 🚩 3. Connecting (WiFi connecting or MQTT connecting) -> BLINK GREEN
+    if (WiFi.status() != WL_CONNECTED || !client.connected()) {
+        if (millis() - lastBlink > 500) {
+            lastBlink = millis();
+            blinkState = !blinkState;
+            setLED(false, blinkState, false);
+        }
+    } 
+    // 🚩 4. Fully Connected -> SOLID GREEN
+    else {
+        setLED(false, true, false);
+    }
+}
 
 // --- Core 0 Task: Bluetooth Scanning ---
 void BLELoop(void * pvParameters) {
@@ -40,7 +79,13 @@ void setup() {
     Serial.begin(115200);
     
     pinMode(BUTTON_PIN, INPUT_PULLUP);
-    
+    pinMode(LED_RED, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+
+    // Initial LED state
+    setLED(true, false, false); // Default to RED until logic takes over
+
     initStorage();
     servoManager.begin();
     ultrasonicManager.begin();
@@ -55,6 +100,7 @@ void setup() {
 
     String ssid = getSSID();
     String pass = getPass();
+    isRegisteredCached = (ssid != ""); // 🚩 Set the cache for the LED logic
 
     if (ssid == "") {
         Serial.println("⚠️ No WiFi saved. Entering BLE Provisioning Mode...");
@@ -84,6 +130,7 @@ void setup() {
 }
 
 void loop() {
+    updateLEDState();
     if (client.connected()) client.loop();
 
     // 1. Button Logic (Manual Dispense vs. Long-Press Tare)
@@ -109,10 +156,12 @@ void loop() {
             float target = getGramsPerServing();
             Serial.println("Button Pressed! Starting manual managed cycle (" + String(target) + "g).");
             
+            isDispensing = true;
             if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
                 publishFeederActivity("MANUAL_DISPENSE", target);
                 lastDispenseTime = millis(); // 🚩 Reset the 3-hour interval for collars
             }
+            isDispensing = false;
         }
         delay(500); // Debounce
     }

@@ -203,6 +203,7 @@ void setup() {
 
 void loop() {
     updateLEDState();
+    updateDoorAutomation(); // 🚩 RUN STATE MACHINE (Core 1) - Ensures 10s logic works even if not registered
     if (client.connected()) client.loop();
     checkIRActivity();
 

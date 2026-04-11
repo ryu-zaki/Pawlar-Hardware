@@ -8,5 +8,6 @@ extern String lastSeenCollarId;
 
 void initProximityScan();
 void scanForCollar();
+void updateDoorAutomation();
 void handleRemoteCommand(String state); // Handle manual state changes from MQTT
 #endif

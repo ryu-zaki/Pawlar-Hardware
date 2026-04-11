@@ -8,6 +8,7 @@
 extern String authorizedCollarsCache;
 extern ServoManager servoManager;
 extern LoadCellManager loadCellManager;
+extern volatile bool isDispensing;
 
 // --- CONFIG ---
 const int RSSI_THRESHOLD_DISPENSE = -75; 
@@ -59,7 +60,9 @@ void scanForCollar() {
         if (millis() - lastDispenseTime > DISPENSE_COOLDOWN) {
             float target = getGramsPerServing();
             Serial.println("🐾 Authorized pet detected! Dispensing " + String(target) + "g food...");
+            isDispensing = true;
             servoManager.dispenseWithBlockage(target, loadCellManager);
+            isDispensing = false;
             publishFeederActivity("AUTO_DISPENSE", target);
             publishNotification("Food Dispensed", "successfully dispensed a meal.", "INFO", triggerId);
             lastDispenseTime = millis();
