@@ -35,6 +35,16 @@ int lastReportedPercent = -1; // 🚩 Track last sent value to avoid spam
 
 void IRAM_ATTR isr() { btnPressed = true; }
 
+// --- 💡 CONNECTION LED LOGIC ---
+void updateConnectionLED() {
+    // ON only if connected to WiFi AND the Cloud (MQTT)
+    if (WiFi.status() == WL_CONNECTED && client.connected()) {
+        digitalWrite(LED_CONN_PIN, HIGH);
+    } else {
+        digitalWrite(LED_CONN_PIN, LOW);
+    }
+}
+
 // --- 🔋 BATTERY FUNCTION (Quantized 25/50/75/100) ---
 int getBatteryPercentage() {
     long sum = 0;
@@ -67,7 +77,7 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length) {
     if (topicStr == TOPIC_BATTERY_SHARED) {
         if (message == "GET_BATTERY" || message == "REFRESH") {
             int batLevel = getBatteryPercentage();
-            String batPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(batLevel) + "}";
+            String batPayload = "[{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(batLevel) + "}]";
             client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
             lastReportedPercent = batLevel; // Sync last reported
         }
@@ -139,6 +149,9 @@ void setup() {
 
     pinMode(LED_PIN, OUTPUT); 
     digitalWrite(LED_PIN, HIGH);
+    
+    pinMode(LED_CONN_PIN, OUTPUT);
+    digitalWrite(LED_CONN_PIN, LOW); // Start OFF
 
     // 2. Start BLE with the CORRECT mode
     initBLE(pairingMode); 
@@ -164,6 +177,8 @@ void setup() {
 }
 
 void loop() {
+    updateConnectionLED(); // 🚩 Update Green LED status
+
     // 2. 🛰️ GPS & NETWORK LOGIC
     readGPS(); 
 
@@ -189,7 +204,7 @@ void loop() {
             
             // 🚩 Only publish to App if the quantized percentage has changed
             if (bat != lastReportedPercent) {
-                String batPayload = "{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(bat) + "}";
+                String batPayload = "[{\"device_id\": \"" + getUniqueDeviceID() + "\", \"battery_level\": " + String(bat) + "}]";
                 client.publish(TOPIC_BATTERY_SHARED, batPayload.c_str());
                 lastReportedPercent = bat;
                 Serial.printf("📤 Published Quantized Battery: %d%%\n", bat);

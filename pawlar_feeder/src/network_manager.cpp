@@ -13,6 +13,7 @@ extern LoadCellManager loadCellManager;
 extern ServoManager servoManager;
 extern unsigned long lastDispenseTime;
 extern volatile bool isDispensing;
+extern void setLED(bool r, bool g, bool b);
 
 WiFiClientSecure feederWifiClient;
 PubSubClient client(feederWifiClient);
@@ -43,6 +44,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 Serial.println("📱 App Command: FEEDing " + String(target) + "g...");
                 
                 isDispensing = true;
+                setLED(false, false, true); // 🔵 Force Blue LED
                 if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
                     publishFeederConfirmation("FEED", target, true);
                     lastDispenseTime = millis(); // Reset 3-hour interval
@@ -82,6 +84,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 float target = doc["amount"] | getGramsPerServing();
                 Serial.println("🍖 Remote Command: Dispensing " + String(target) + "g...");
                 isDispensing = true;
+                setLED(false, false, true); // 🔵 Force Blue LED
                 if (servoManager.dispenseWithBlockage(target, loadCellManager)) {
                     publishFeederActivity("CMD_DISPENSE", target);
                     lastDispenseTime = millis(); // 🚩 Reset the 3-hour interval for collars

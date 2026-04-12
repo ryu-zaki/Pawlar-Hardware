@@ -10,9 +10,10 @@
 // --- 🌐 BACKEND ---
 static const char* BACKEND_URL = "https://your-project-name.railway.app/api/telemetry";
 
-// --- 📍 PINS (Matched to Sandwich Wiring Guide) ---
+// 📍 PINS (Matched to Sandwich Wiring Guide) ---
 #define BUTTON_PIN      9      // Side Button (Pin 9 to GND)
-#define LED_PIN         8      // Onboard System LED
+#define LED_PIN         8      // Onboard System LED 
+#define LED_CONN_PIN    10     // NEW: Green Connection LED
 
 // 🛰️ GPS (Matching your latest wiring: RX on 3, TX on 4)
 #define GPS_RX_PIN      2    

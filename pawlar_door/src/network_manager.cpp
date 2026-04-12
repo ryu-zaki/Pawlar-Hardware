@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
+#include <HTTPClient.h>
 #include "network_manager.h"
 #include "storage_manager.h"
 #include "battery_manager.h"
@@ -210,11 +211,12 @@ void logTriggerEvent(int rssi, double distance) {
 
 void publishBatteryHealth(float voltage, float current, int percentage) {
     String deviceId = getDeviceId();
-    String payload = "{\"device_id\": \"" + deviceId + "\", \"battery_level\": " + String(percentage) + "}";
+    // 🚩 Modified to Array format because the app scans for lists of devices/collars
+    String payload = "[{\"device_id\": \"" + deviceId + "\", \"battery_level\": " + String(percentage) + "}]";
     
     if (client.connected()) {
         client.publish(TOPIC_BATTERY, payload.c_str());
-        Serial.println("📤 Published Battery: " + payload);
+        Serial.println("📤 Published Battery (Array): " + payload);
     }
 }
 
@@ -235,4 +237,41 @@ void publishNotification(String title, String description, String type, String t
     serializeJson(doc, payload);
     client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
     Serial.println("📤 Published Notification: " + payload);
+}
+
+void requestCollarSync() {
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    String myId = getDeviceId();
+    String url = String(BACKEND_URL) + "/door/registered-collars/" + myId;
+    
+    Serial.println("🌐 Syncing Collars from: " + url);
+
+    HTTPClient http;
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode == 200) {
+        String payload = http.getString();
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, payload);
+
+        if (!error) {
+            JsonArray collars = doc["registeredCollars"].as<JsonArray>();
+            String collarList = "";
+            for (JsonVariant v : collars) {
+                if (collarList != "") collarList += "|";
+                collarList += v.as<String>();
+            }
+
+            saveAuthorizedCollar(collarList);
+            authorizedCollarsCache = collarList;
+            Serial.println("✅ Sync Success! Authorized Collars: " + collarList);
+        } else {
+            Serial.println("❌ Sync JSON Parse Error: " + String(error.c_str()));
+        }
+    } else {
+        Serial.printf("❌ Sync Failed, HTTP Code: %d\n", httpCode);
+    }
+    http.end();
 }

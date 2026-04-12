@@ -32,6 +32,9 @@
 #define MQTT_USER        "pawlar_mqtt"
 #define MQTT_PASSWORD    "Pawlar123"
 
+// --- 🌐 BACKEND CONFIG ---
+#define BACKEND_URL      "http://192.168.0.106:3000/esp32/"
+
 // --- 🔵 SHARED BLE UUIDS ---
 #define SERVICE_UUID           "172f3570-5645-4290-9519-046c64d85148"
 #define CHAR_CREDENTIALS_UUID  "2388432a-360e-4363-8025-055171736417"

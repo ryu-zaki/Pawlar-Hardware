@@ -103,14 +103,22 @@ void handleManualActivityLog(String event) {
     }
 }
 
+static bool wasMovingUp = false;
+static bool wasMovingDown = false;
+
 // --- Motor Control Functions ---
 void stopMotors() {
     analogWrite(MOT_A_ENA, 0);
     analogWrite(MOT_B_ENB, 0);
+    wasMovingUp = false;
+    wasMovingDown = false;
 }
 
 void moveUp() {
-    Serial.println("⬆️ Logic: Moving Up...");
+    if (!wasMovingUp) {
+        Serial.println("⬆️ Logic: Moving Up...");
+        wasMovingUp = true;
+    }
     digitalWrite(MOT_A_IN1, HIGH); digitalWrite(MOT_A_IN2, LOW);
     digitalWrite(MOT_B_IN3, HIGH); digitalWrite(MOT_B_IN4, LOW);
     analogWrite(MOT_A_ENA, 255);
@@ -127,7 +135,10 @@ void moveDown() {
         return;
     }
 
-    Serial.println("⬇️ Logic: Moving Down...");
+    if (!wasMovingDown) {
+        Serial.println("⬇️ Logic: Moving Down...");
+        wasMovingDown = true;
+    }
     digitalWrite(MOT_A_IN1, LOW); digitalWrite(MOT_A_IN2, HIGH);
     digitalWrite(MOT_B_IN3, LOW); digitalWrite(MOT_B_IN4, HIGH);
     analogWrite(MOT_A_ENA, 255);
@@ -179,6 +190,7 @@ void setup() {
     } else {
         if (connectToWiFi(ssid, pass)) {
             initNetwork(); // Setup MQTT and HTTP Sync
+            requestCollarSync(); // 🚩 Sync registered collars from backend
             
             // --- Create Core 0 Task ---
             // This offloads the heavy BLE scanning to the other CPU core.

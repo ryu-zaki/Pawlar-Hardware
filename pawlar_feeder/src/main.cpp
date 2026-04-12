@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "config.h"
 #include "servo_manager.h"
 #include "ultrasonic_manager.h"
@@ -14,6 +15,9 @@ TaskHandle_t BLETask;
 extern unsigned long lastDispenseTime;
 bool isRegisteredCached = false;
 volatile bool isDispensing = false;
+
+// Function Prototypes
+void setLED(bool r, bool g, bool b);
 
 // Manager Instances
 ServoManager servoManager(SERVO_PIN, BOWL_SERVO_PIN);
