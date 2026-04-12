@@ -34,6 +34,17 @@ void setPairingRequest(bool enable) {
     preferences.putBool("pairing_req", enable);
     preferences.end();
 }
+void setNewlyRegistered(bool b) {
+    preferences.begin("system", false);
+    preferences.putBool("new_reg", b);
+    preferences.end();
+}
+bool isNewlyRegistered() {
+    preferences.begin("system", true);
+    bool b = preferences.getBool("new_reg", false);
+    preferences.end();
+    return b;
+}
 String getMACAddress() {
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_BT);
@@ -43,11 +54,7 @@ String getMACAddress() {
     return String(macStr);
 }
 String getUniqueDeviceID() {
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_BT);
-    char idString[20];
-    snprintf(idString, 20, "COLLAR_%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
-    return String(idString);
+    return getMACAddress();
 }
 void initStorage() {
     // Initialize NVS

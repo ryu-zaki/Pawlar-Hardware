@@ -31,16 +31,48 @@ int calculateBatteryPercentage(float voltage) {
     float maxV = 12.6; // 3S Full
     int percentage = (int)((voltage - minV) / (maxV - minV) * 100);
     percentage = constrain(percentage, 0, 100);
-    // Round to nearest 10 for cleaner reporting
-    return (percentage / 10) * 10;
+    
+    // 🚩 QUANTIZATION LOGIC (0-25->25, 26-50->50, 51-75->75, 76-100->100)
+    if (percentage <= 25) return 25;
+    if (percentage <= 50) return 50;
+    if (percentage <= 75) return 75;
+    return 100;
 }
+
+bool doorLowBatteryNotified = false;
+int lastReportedPercent = -1; // Track last sent value to avoid spam
 
 void reportBatteryHealth() {
     float voltage = getVoltage();
     int batPercent = calculateBatteryPercentage(voltage);
     
-    Serial.printf("🔋 [BATTERY]: %.2fV (%d%%)\n", voltage, batPercent);
+    Serial.printf("🔋 [BATTERY]: %.2fV (Internal: %d%%, Display: %d%%)\n", voltage, (int)((voltage-9.6)/3.0*100), batPercent);
     
-    // We send 0.0 for current since resistors can't measure mA
-    publishBatteryHealth(voltage, 0.0, batPercent); 
+    // 🚩 Only publish to App if the quantized percentage has changed
+    if (batPercent != lastReportedPercent) {
+        publishBatteryHealth(voltage, 0.0, batPercent); 
+        lastReportedPercent = batPercent;
+        Serial.printf("📤 Published Quantized Battery: %d%%\n", batPercent);
+    }
+
+    if (batPercent <= 25 && !doorLowBatteryNotified) {
+        publishNotification("Battery Low", "battery is low. Please check the power source.", "WARNING", "");
+        doorLowBatteryNotified = true;
+    } else if (batPercent > 25) {
+        doorLowBatteryNotified = false;
+    }
+}
+
+bool isBatteryLow() {
+    static bool cachedStatus = false;
+    static unsigned long lastCheck = 0;
+    
+    // Only check every 5 seconds to save CPU
+    if (millis() - lastCheck > 5000 || lastCheck == 0) {
+        lastCheck = millis();
+        float voltage = getVoltage();
+        int batPercent = calculateBatteryPercentage(voltage);
+        cachedStatus = (batPercent <= 25);
+    }
+    return cachedStatus;
 }

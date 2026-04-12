@@ -33,6 +33,7 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
                     if (connectToWiFi(ssid, pass)) {
                         // Save to NVS ONLY IF successful
                         saveCredentials(ssid, pass); 
+                        setNewlyRegistered(true);
                         Serial.println("✅ WiFi Verified & Saved. Rebooting to establish cloud connection...");
                         delay(2000);
                         ESP.restart(); 

@@ -29,6 +29,7 @@ class ProvisioningCallbacks: public BLECharacteristicCallbacks {
                     Serial.println("🔄 Testing WiFi Connection...");
                     if (connectToWiFi(ssid, pass)) {
                         saveCredentials(ssid, pass); 
+                        setNewlyRegistered(true);
                         Serial.println("✅ WiFi Verified & Saved. Rebooting...");
                         delay(2000);
                         ESP.restart(); 

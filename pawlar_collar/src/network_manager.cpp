@@ -29,35 +29,45 @@ void connectToCloud(String ssid, String pass) {
         Serial.println("\n✅ WiFi Connected!");
         testWifiClient.setInsecure(); 
         client.setServer(MQTT_SERVER, MQTT_PORT);
+        client.setKeepAlive(15); 
 
         String macAddr = getMACAddress();
         String clientId = "Pawlar-" + macAddr;
-        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+        String lwtTopic = TOPIC_STATUS;
+        String deviceId = getUniqueDeviceID();
+        
+        String offlinePayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+        String onlineStatusPayload = "{\"device_id\": \"" + deviceId + "\", \"message\": \"ONLINE\"}";
+
+        String wifiStatusTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
+
+        if (client.connect(clientId.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ MQTT Connected instantly!");
 
+            // --- PUBLISH ONLINE STATUS (Retained for App Modal) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); 
+
             // 1. Send specific WiFi confirmation for the App
-            String wifiPayload = "{\"device_id\": \"" + macAddr + "\", \"isConnected\": true}";
-            String wifiTopic = String(TOPIC_WIFI_PUB) + "/" + macAddr;
-            client.publish(wifiTopic.c_str(), wifiPayload.c_str());
+            String wifiPayload = "{\"device_id\": \"" + deviceId + "\", \"isConnected\": true}";
+            client.publish(wifiStatusTopic.c_str(), wifiPayload.c_str());
             Serial.println("📤 Sent WiFi Confirmation: " + wifiPayload);
 
-            // 2. Send general status
-            String statusPayload = "{";
-            statusPayload += "\"id\": \"" + getUniqueDeviceID() + "\","; 
-            statusPayload += "\"status\": \"ONLINE\",";
-            statusPayload += "\"ip\": \"" + WiFi.localIP().toString() + "\"";
-            statusPayload += "}";
+            // 2. Send Online Notification (Stored in Notification Tab)
+            publishNotification("Collar Online", "is now online.", "INFO");
 
-            client.publish(TOPIC_STATUS, statusPayload.c_str()); 
+            if (isNewlyRegistered()) {
+                publishNotification("New Collar Registered", "is now registered to your account.", "INFO");
+                setNewlyRegistered(false);
+            }
+            
             client.subscribe(TOPIC_BATTERY_SHARED);
         } else {
             Serial.println("❌ MQTT Connection Failed!");
-            sendWifiStatusCellular(false);
+            // sendWifiStatusCellular(false); // Disabled: Backend not ready
         }
     } else {
         Serial.println("\n❌ WiFi Connection Failed!");
-        // Notify app via Cellular if WiFi failed
-        sendWifiStatusCellular(false);
+        // sendWifiStatusCellular(false); // Disabled: Backend not ready
     }
 }
 
@@ -84,4 +94,23 @@ void sendLocationData(float lat, float lng, int sats) {
     serializeJson(doc, json);
     int code = http.POST(json);
     http.end();
+}
+
+void publishNotification(String title, String description, String type, String trigger_id) {
+    if (!client.connected()) return;
+
+    JsonDocument doc;
+    doc["device_id"] = getUniqueDeviceID();
+    doc["device_type"] = "COLLAR";
+    doc["title"] = title;
+    doc["description"] = description;
+    doc["type"] = type;
+    if (trigger_id != "") {
+        doc["trigger_id"] = trigger_id;
+    }
+
+    String payload;
+    serializeJson(doc, payload);
+    client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
+    Serial.println("📤 Published Notification: " + payload);
 }

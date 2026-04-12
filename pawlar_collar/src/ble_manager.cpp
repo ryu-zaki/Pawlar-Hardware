@@ -19,6 +19,7 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
                 const char* p = doc["password"];
                 if (s && p) {
                     saveWiFiCreds(s, p);
+                    setNewlyRegistered(true);
                     setPairingRequest(false);
                     Serial.println("💾 WiFi Credentials Saved! Rebooting...");
                     delay(1000); 
@@ -30,10 +31,10 @@ class PairingCallbacks: public BLECharacteristicCallbacks {
 };
 
 void initBLE(bool isPairing) {
-    String deviceName = getUniqueDeviceID(); // COLLAR_XXXXXXXX
+    String deviceName = getUniqueDeviceID(); 
 
     if (isPairing) {
-        deviceName += " Setup"; 
+        deviceName = "COLLAR_" + deviceName + " Setup"; 
     }
 
     BLEDevice::init(deviceName.c_str());

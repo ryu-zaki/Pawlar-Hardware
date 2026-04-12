@@ -10,20 +10,21 @@
 // --- 🌐 BACKEND ---
 static const char* BACKEND_URL = "https://your-project-name.railway.app/api/telemetry";
 
-// --- 📍 PINS (Matched to Sandwich Wiring Guide) ---
+// 📍 PINS (Matched to Sandwich Wiring Guide) ---
 #define BUTTON_PIN      9      // Side Button (Pin 9 to GND)
-#define LED_PIN         8      // Onboard System LED
+#define LED_PIN         8      // Onboard System LED 
+#define LED_CONN_PIN    10     // NEW: Green Connection LED
 
-// 🛰️ GPS (Using Pins 2 & 3 to avoid USB-Serial conflict)
-#define GPS_RX_PIN      3     // GPS TX -> ESP32 RX (Pin 2)
-#define GPS_TX_PIN      2      // GPS RX -> ESP32 TX (Pin 3)
+// 🛰️ GPS (Matching your latest wiring: RX on 3, TX on 4)
+#define GPS_RX_PIN      2    
+#define GPS_TX_PIN      3
 
-// 🔋 Battery Health Sensor
-#define BATTERY_PIN     4      // Analog Input from 100k Divider
+// 🔋 Battery Health Sensor (Moved to Pin 1 to avoid GPS conflict)
+#define BATTERY_PIN     1      // Analog Input from 100k Divider
 
 // --- 📡 4G Module (A7670C) ---
-#define GSM_RX_PIN      20     // 4G TX -> ESP32 RX
-#define GSM_TX_PIN      21     // 4G RX -> ESP32 TX
+#define GSM_RX_PIN      6      // 4G TX -> ESP32 RX
+#define GSM_TX_PIN      7      // 4G RX -> ESP32 TX
 #define GSM_BAUD        115200
 
 // --- 📡 SETTINGS ---
@@ -52,5 +53,6 @@ static const char* BACKEND_URL = "https://your-project-name.railway.app/api/tele
 #define TOPIC_BATTERY_SHARED   "pawlar/collar/battery"
 #define TOPIC_COMMANDS         "pawlar/collar/commands"
 #define TOPIC_WIFI_PUB         "pawlar/collar/wifi"
+#define TOPIC_NOTIFICATIONS    "pawlar/collar/notifications"
 
 #endif

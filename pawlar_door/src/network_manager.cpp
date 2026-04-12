@@ -2,9 +2,11 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h> 
+#include <HTTPClient.h>
 #include "network_manager.h"
 #include "storage_manager.h"
 #include "battery_manager.h"
+#include "proximity_manager.h"
 #include "config.h"
 
 // 🚩 This allows network_manager to see the variable from main.cpp
@@ -23,6 +25,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     String myId = getDeviceId();
     String myLinkedCollarsTopic = "pawlar/door/linked-collars/" + myId;
     String mySyncTopic = "pawlar/door/" + myId + "/sync";
+
+    // --- HANDLE DOOR CONTROLS ---
+    if (topicStr == TOPIC_DOOR_CONTROLS) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, message);
+        if (!error) {
+            String deviceId = doc["device_id"].as<String>();
+            bool confirmed = doc["confirmed"].as<bool>();
+            String state = doc["state"].as<String>();
+
+            if (deviceId == myId && !confirmed) {
+                handleRemoteCommand(state);
+            }
+        }
+        return;
+    }
 
     // --- HANDLE COLLAR SYNC (Either Topic) ---
     if (topicStr == myLinkedCollarsTopic || (topicStr == mySyncTopic && message.indexOf("device_id") != -1)) {
@@ -64,6 +82,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
                 
                 Serial.println("💾 NVS & Cache Updated! Authorized Collars: " + collarList);
                 publishDoorActivity("AUTH_SYNC_COMPLETE", 0.0);
+                publishNotification("Collar Linked to Door", "is now linked with a new collar.", "INFO");
             } else {
                 Serial.println("⚠️ JSON received, but no valid collar data was found.");
             }
@@ -98,11 +117,20 @@ void initNetwork() {
     doorWifiClient.setInsecure(); 
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setCallback(mqttCallback); 
+    client.setKeepAlive(15); 
     
     String doorIdentity = getDeviceId(); 
+    String lwtTopic = TOPIC_DOOR_STATUS;
+    
+    // 🚩 Keep original LWT for Status/Modal
+    String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"OFFLINE_UNEXPECTED\"}";
+    String onlineStatusPayload = "{\"device_id\": \"" + doorIdentity + "\", \"message\": \"ONLINE\"}";
+
+    // 📝 Notification structure for Reference
+    // String offlineNotification = "{\"device_id\": \"" + doorIdentity + "\", \"device_type\": \"DOOR\", \"title\": \"Door Offline\", \"description\": \"went offline.\", \"type\": \"WARNING\"}";
+
     String wifiStatusTopic = "pawlar/door/wifi/" + doorIdentity;
     String linkedCollarsTopic = "pawlar/door/linked-collars/" + doorIdentity;
-    String offlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": false}";
 
     Serial.println("☁️ Connecting to HiveMQ...");
     
@@ -110,8 +138,11 @@ void initNetwork() {
     while (!client.connected() && retryCount < 3) {
         Serial.printf("Attempt %d as %s\n", retryCount + 1, doorIdentity.c_str());
         
-        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, wifiStatusTopic.c_str(), 0, false, offlinePayload.c_str())) {
+        if (client.connect(doorIdentity.c_str(), MQTT_USER, MQTT_PASSWORD, lwtTopic.c_str(), 0, false, offlinePayload.c_str())) {
             Serial.println("✅ HiveMQ Connected!");
+            
+            // --- PUBLISH ONLINE STATUS (Same format as LWT) ---
+            client.publish(lwtTopic.c_str(), onlineStatusPayload.c_str(), true); // Retained
             
             // --- SUBSCRIBE TO RELEVANT TOPICS ---
             client.subscribe(linkedCollarsTopic.c_str()); 
@@ -124,9 +155,23 @@ void initNetwork() {
             client.subscribe("pawlar/door/sync"); // General sync topic
             Serial.println("👂 Subscribed to: pawlar/door/sync");
 
+            client.subscribe(TOPIC_DOOR_CONTROLS);
+            Serial.println("👂 Subscribed to: " + String(TOPIC_DOOR_CONTROLS));
+
+            client.subscribe(TOPIC_BATTERY);
+            Serial.println("👂 Subscribed to: " + String(TOPIC_BATTERY));
+
             String onlinePayload = "{\"device_id\": \"" + doorIdentity + "\", \"isConnected\": true}";
             client.publish(wifiStatusTopic.c_str(), onlinePayload.c_str());
             Serial.println("📤 Published Status: " + onlinePayload);
+
+            // Send Online Notification
+            publishNotification("Door Online", "is now online.", "INFO");
+
+            if (isNewlyRegistered()) {
+                publishNotification("New Door Registered", "is now registered.", "INFO");
+                setNewlyRegistered(false);
+            }
 
         } else {
             Serial.printf("❌ Failed (rc=%d). Retrying...\n", client.state());
@@ -148,6 +193,17 @@ void publishDoorActivity(String event, double distance) {
     }
 }
 
+void publishDoorConfirmation(String state, bool confirmed) {
+    String deviceId = getDeviceId();
+    String confStr = confirmed ? "true" : "false";
+    String payload = "{\"state\": \"" + state + "\", \"device_id\": \"" + deviceId + "\", \"confirmed\": " + confStr + "}";
+    
+    if (client.connected()) {
+        client.publish(TOPIC_DOOR_CONTROLS, payload.c_str());
+        Serial.println("📤 Published Confirmation: " + payload);
+    }
+}
+
 void logTriggerEvent(int rssi, double distance) {
     publishDoorActivity("PROXIMITY_OPEN", distance);
     Serial.println("📤 Activity Log Published.");
@@ -155,10 +211,67 @@ void logTriggerEvent(int rssi, double distance) {
 
 void publishBatteryHealth(float voltage, float current, int percentage) {
     String deviceId = getDeviceId();
-    String payload = "{\"device\":\"" + deviceId + "\", \"type\":\"HEALTH\", \"voltage\":" + String(voltage, 2) + 
-                     ", \"battery\":" + String(percentage) + "}";
+    // 🚩 Modified to Array format because the app scans for lists of devices/collars
+    String payload = "[{\"device_id\": \"" + deviceId + "\", \"battery_level\": " + String(percentage) + "}]";
     
     if (client.connected()) {
-        client.publish("pawlar/door/activity", payload.c_str());
+        client.publish(TOPIC_BATTERY, payload.c_str());
+        Serial.println("📤 Published Battery (Array): " + payload);
     }
+}
+
+void publishNotification(String title, String description, String type, String trigger_id) {
+    if (!client.connected()) return;
+
+    JsonDocument doc;
+    doc["device_id"] = getDeviceId();
+    doc["device_type"] = "DOOR";
+    doc["title"] = title;
+    doc["description"] = description;
+    doc["type"] = type;
+    if (trigger_id != "") {
+        doc["trigger_id"] = trigger_id;
+    }
+
+    String payload;
+    serializeJson(doc, payload);
+    client.publish(TOPIC_NOTIFICATIONS, payload.c_str());
+    Serial.println("📤 Published Notification: " + payload);
+}
+
+void requestCollarSync() {
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    String myId = getDeviceId();
+    String url = String(BACKEND_URL) + "/door/registered-collars/" + myId;
+    
+    Serial.println("🌐 Syncing Collars from: " + url);
+
+    HTTPClient http;
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode == 200) {
+        String payload = http.getString();
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, payload);
+
+        if (!error) {
+            JsonArray collars = doc["registeredCollars"].as<JsonArray>();
+            String collarList = "";
+            for (JsonVariant v : collars) {
+                if (collarList != "") collarList += "|";
+                collarList += v.as<String>();
+            }
+
+            saveAuthorizedCollar(collarList);
+            authorizedCollarsCache = collarList;
+            Serial.println("✅ Sync Success! Authorized Collars: " + collarList);
+        } else {
+            Serial.println("❌ Sync JSON Parse Error: " + String(error.c_str()));
+        }
+    } else {
+        Serial.printf("❌ Sync Failed, HTTP Code: %d\n", httpCode);
+    }
+    http.end();
 }

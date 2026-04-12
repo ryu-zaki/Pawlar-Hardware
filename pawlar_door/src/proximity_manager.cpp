@@ -23,13 +23,57 @@ const unsigned long COLLAR_TIMEOUT = 2000; // 2 seconds
 const unsigned long WAITING_TIMEOUT = 5000; // 5 seconds for door to wait before closing
 
 // --- STATE MACHINE ---
-enum DoorState { DOOR_IDLE, DOOR_OPENING, DOOR_WAITING, DOOR_CLOSING };
 DoorState currentDoorState = DOOR_IDLE;
+unsigned long currentPositionMs = 0; // 0 = closed, TRAVEL_TIME = fully open
+unsigned long lastUpdateTime = 0;
 
 unsigned long doorCycleStartTime = 0;
 unsigned long waitingStartTime = 0; // Added: To track when the door entered WAITING state
 int lastSeenRssi = -100;
 unsigned long lastSeenCollarTime = 0;
+String lastSeenCollarId = "";
+
+// --- REMOTE OVERRIDE STATE ---
+bool pendingManualConfirmation = false;
+String manualConfirmationState = "";
+bool manualOverrideActive = false; // Flag to disable auto-close
+
+void handleRemoteCommand(String state) {
+    // 🚩 BLOCKADE: Finish the 10-second process first before accepting new commands
+    if (currentDoorState == DOOR_OPENING || currentDoorState == DOOR_CLOSING) {
+        Serial.println("🚫 BUSY: Command Ignored. Waiting for current process to finish.");
+        return; 
+    }
+
+    if (state == "OPEN") {
+        // 🚩 REDUNDANCY CHECK: Don't open if already open
+        if (currentDoorState == DOOR_OPEN || (currentDoorState == DOOR_WAITING && currentPositionMs >= TRAVEL_TIME)) {
+            Serial.println("ℹ️ Door is already OPEN. Command Ignored.");
+            return;
+        }
+        Serial.println("🌐 MQTT CMD: OPENing Door (Manual Override)...");
+        currentDoorState = DOOR_OPENING;
+        isMoving = true;
+        manualOverrideActive = true; // Stay open until further notice (manual controls)
+        moveUp();
+        pendingManualConfirmation = true;
+        manualConfirmationState = "OPEN";
+    } else if (state == "CLOSED") {
+        // 🚩 REDUNDANCY CHECK: Don't close if already closed
+        if (currentDoorState == DOOR_IDLE && currentPositionMs == 0) {
+            Serial.println("ℹ️ Door is already CLOSED. Command Ignored.");
+            return;
+        }
+        Serial.println("🌐 MQTT CMD: CLOSING Door (Manual Override)...");
+        currentDoorState = DOOR_CLOSING;
+        isMoving = true;
+        manualOverrideActive = false; // Reset override when manually closing
+        moveDown();
+        pendingManualConfirmation = true;
+        manualConfirmationState = "CLOSED";
+        publishNotification("Door Locked", "has been locked.", "INFO");
+    }
+}
 
 void initProximityScan() {
     String doorName = "DOOR_" + getUniqueDoorID();
@@ -43,7 +87,6 @@ void initProximityScan() {
 void scanForCollar() {
     String authList = authorizedCollarsCache;
     if (authList == "") {
-        // Serial.println("DEBUG: authList is empty");
         return;
     }
 
@@ -58,40 +101,50 @@ void scanForCollar() {
     BLEScanResults foundDevices = pBLEScan->start(1, false);
 
     bool authorizedCollarFound = false;
+    int maxRssi = -100; // Track the strongest signal
+    String strongestCollarId = "";
+
     for (int i = 0; i < foundDevices.getCount(); i++) {
         BLEAdvertisedDevice device = foundDevices.getDevice(i);
         String foundName = device.getName().c_str();
         String foundAddr = device.getAddress().toString().c_str();
         foundAddr.toUpperCase(); // Ensure consistency
         
-        // DEBUG: Print all found devices to help troubleshoot
-        if (foundName.startsWith("COLLAR") || authList.indexOf(foundAddr) != -1) {
-            Serial.printf("DEBUG: Found Device: [%s] (%s), RSSI: %d, Authorized: %s\n", 
-                          foundName.c_str(), foundAddr.c_str(), device.getRSSI(), 
-                          (authList.indexOf(foundName) != -1 || authList.indexOf(foundAddr) != -1) ? "YES" : "NO");
-        }
-
         bool isAuthorized = false;
         if (foundName.length() > 0 && authList.indexOf(foundName) != -1) isAuthorized = true;
         if (authList.indexOf(foundAddr) != -1) isAuthorized = true;
 
         if (isAuthorized) {
-            lastSeenRssi = device.getRSSI();
-            lastSeenCollarTime = millis();
+            int currentRssi = device.getRSSI();
+            if (currentRssi > maxRssi) {
+                maxRssi = currentRssi;
+                strongestCollarId = foundName.length() > 0 ? foundName : foundAddr;
+            }
             authorizedCollarFound = true;
-            break; 
         }
     }
     pBLEScan->clearResults();
 
+    if (authorizedCollarFound) {
+        lastSeenRssi = maxRssi;
+        lastSeenCollarTime = millis();
+        lastSeenCollarId = strongestCollarId;
+    }
+}
+
+void updateDoorAutomation() {
+    unsigned long now = millis();
+    unsigned long dt = (lastUpdateTime == 0) ? 0 : now - lastUpdateTime;
+    lastUpdateTime = now;
 
     // --- AUTOMATION STATE MACHINE ---
     switch (currentDoorState) {
         case DOOR_IDLE:
-            if (authorizedCollarFound && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
+            currentPositionMs = 0;
+            // Only trigger auto-open if we are NOT in provisioning mode (i.e., we have authorized collars)
+            if (authorizedCollarsCache != "" && (millis() - lastSeenCollarTime < COLLAR_TIMEOUT) && lastSeenRssi >= RSSI_THRESHOLD_OPEN) {
                 Serial.println("🔓 Proximity Match! Starting Auto-Cycle...");
                 currentDoorState = DOOR_OPENING;
-                doorCycleStartTime = millis();
                 petHasPassed = false; // Reset for the new cycle
                 isMoving = true;
                 moveUp();
@@ -99,53 +152,98 @@ void scanForCollar() {
             break;
 
         case DOOR_OPENING:
-            if (millis() - doorCycleStartTime >= TRAVEL_TIME) {
-                Serial.println("🛑 Door has reached the top. Now waiting.");
+            currentPositionMs += dt;
+            if (currentPositionMs >= TRAVEL_TIME) {
+                currentPositionMs = TRAVEL_TIME;
                 stopMotors();
-                currentDoorState = DOOR_WAITING;
-                waitingStartTime = millis(); // Set waiting start time
+                isMoving = false; // 🚩 RELEASE BLOCKADE: Door is now stationary
+                
+                if (manualOverrideActive) {
+                    Serial.println("🛑 Manual Open Complete. Holding state.");
+                    currentDoorState = DOOR_OPEN;
+                } else {
+                    Serial.println("🛑 Auto Open Complete. Now waiting.");
+                    currentDoorState = DOOR_WAITING;
+                    waitingStartTime = millis();
+                }
+
+                publishNotification("Door Opened", "has been opened.", "INFO");
+
+                if (pendingManualConfirmation && manualConfirmationState == "OPEN") {
+                    publishDoorConfirmation("OPEN", true);
+                    pendingManualConfirmation = false;
+                }
+            } else {
+                moveUp();
             }
             break;
 
         case DOOR_WAITING:
+            currentPositionMs = TRAVEL_TIME;
+            
+            // IF manual override is active, we NEVER auto-close from this state.
+            if (manualOverrideActive) {
+                currentDoorState = DOOR_OPEN;
+                isMoving = false; 
+                return;
+            }
+
             // Condition 1: Pet has fully passed through the IR sensors
             if (petHasPassed) {
                 Serial.println("🐾 Pet has passed. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
-                doorCycleStartTime = millis(); // Reset timer for closing
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
             // Condition 2: Collar is gone (either out of RSSI range or timed out)
             else if (millis() - lastSeenCollarTime > COLLAR_TIMEOUT || lastSeenRssi < RSSI_THRESHOLD_CLOSE) {
                 Serial.println("📡 Collar out of range. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
-                doorCycleStartTime = millis(); // Reset timer for closing
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
             // Condition 3: Waiting time elapsed
             else if (millis() - waitingStartTime >= WAITING_TIMEOUT) {
                 Serial.println("⏳ Waiting time elapsed. Starting close sequence.");
                 currentDoorState = DOOR_CLOSING;
-                doorCycleStartTime = millis(); // Reset timer for closing
+                isMoving = true; // 🚩 START BLOCKADE: Door is moving
             }
+            break;
+
+        case DOOR_OPEN:
+            currentPositionMs = TRAVEL_TIME;
+            isMoving = false; // 🚩 Ensure blockade is released
+            // Stay here until a manual CLOSE command or physical button press changes the state
             break;
 
         case DOOR_CLOSING:
             if (isPathClear) {
                 moveDown();
+                if (currentPositionMs > dt) {
+                    currentPositionMs -= dt;
+                } else {
+                    currentPositionMs = 0;
+                }
             } else {
+                // 🚩 SAFETY REVERSAL: Obstacle detected!
                 stopMotors();
-                Serial.println("⚠️ OBSTACLE! Pausing close.");
-                // To prevent it from immediately trying to close again, we can go back to waiting
-                currentDoorState = DOOR_WAITING;
-                waitingStartTime = millis(); // Reset waiting start time when returning to WAITING due to obstacle
+                Serial.println("⚠️ OBSTACLE! Reversing to OPEN position for safety.");
+                currentDoorState = DOOR_OPENING; 
+                isMoving = true;
+                moveUp(); 
                 return;
             }
 
             // Check if closing is complete
-            if (millis() - doorCycleStartTime >= TRAVEL_TIME) {
+            if (currentPositionMs == 0) {
                 Serial.println("🔒 Cycle Complete. Door is Closed.");
                 stopMotors();
                 isMoving = false;
                 currentDoorState = DOOR_IDLE;
+                publishNotification("Door Closed", "has been closed.", "INFO");
+
+                if (pendingManualConfirmation && manualConfirmationState == "CLOSED") {
+                    publishDoorConfirmation("CLOSED", true);
+                    pendingManualConfirmation = false;
+                }
             }
             break;
     }

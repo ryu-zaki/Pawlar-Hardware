@@ -12,5 +12,9 @@ void saveAuthorizedCollar(String collarList);
 String getAuthorizedCollarList();
 String getDeviceId();
 String getUniqueFeederID();
+void saveGramsPerServing(float grams);
+float getGramsPerServing();
+bool isNewlyRegistered();
+void setNewlyRegistered(bool b);
 
 #endif

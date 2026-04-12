@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WiFi.h>
 #include "config.h"
 #include "storage_manager.h"
 #include "network_manager.h"
@@ -15,12 +16,61 @@ String authorizedCollarsCache = "";
 unsigned long dualPressStartTime = 0;
 bool isDualPressing = false;
 bool manualActionInProgress = false; // Track if the door is moving due to manual button press
+bool isRegisteredCached = false; // 🚩 Cache for NVS SSID check
 
 // --- Function Prototypes ---
 void stopMotors();
 void moveUp();
 void moveDown();
 void handleManualActivityLog(String event);
+void updateLEDState();
+
+// --- RGB LED Logic ---
+void setLED(bool r, bool g, bool b) {
+    digitalWrite(LED_RED, r ? HIGH : LOW);
+    digitalWrite(LED_GREEN, g ? HIGH : LOW);
+    digitalWrite(LED_BLUE, b ? HIGH : LOW);
+}
+
+void updateLEDState() {
+    static unsigned long lastBlink = 0;
+    static bool blinkState = false;
+
+    // 🚩 1. Low Battery Warning (Blinking RED) - Priority 1
+    if (isBatteryLow()) {
+        if (millis() - lastBlink > 500) {
+            lastBlink = millis();
+            blinkState = !blinkState;
+            setLED(blinkState, false, false);
+        }
+        return;
+    }
+
+    // 🚩 2. Moving State (BLUE) - Priority 2
+    if (isMoving) {
+        setLED(false, false, true);
+        return;
+    }
+
+    // 🚩 3. Not Registered/No WiFi saved -> SOLID RED
+    if (!isRegisteredCached) {
+        setLED(true, false, false);
+        return;
+    }
+
+    // 🚩 4. Connecting (WiFi connecting or MQTT connecting) -> BLINK GREEN
+    if (WiFi.status() != WL_CONNECTED || !client.connected()) {
+        if (millis() - lastBlink > 500) {
+            lastBlink = millis();
+            blinkState = !blinkState;
+            setLED(false, blinkState, false);
+        }
+    } 
+    // 🚩 5. Fully Connected -> SOLID GREEN
+    else {
+        setLED(false, true, false);
+    }
+}
 
 // --- Core 0 Task: Bluetooth Scanning ---
 void BLELoop(void * pvParameters) {
@@ -53,14 +103,22 @@ void handleManualActivityLog(String event) {
     }
 }
 
+static bool wasMovingUp = false;
+static bool wasMovingDown = false;
+
 // --- Motor Control Functions ---
 void stopMotors() {
     analogWrite(MOT_A_ENA, 0);
     analogWrite(MOT_B_ENB, 0);
+    wasMovingUp = false;
+    wasMovingDown = false;
 }
 
 void moveUp() {
-    Serial.println("⬆️ Logic: Moving Up...");
+    if (!wasMovingUp) {
+        Serial.println("⬆️ Logic: Moving Up...");
+        wasMovingUp = true;
+    }
     digitalWrite(MOT_A_IN1, HIGH); digitalWrite(MOT_A_IN2, LOW);
     digitalWrite(MOT_B_IN3, HIGH); digitalWrite(MOT_B_IN4, LOW);
     analogWrite(MOT_A_ENA, 255);
@@ -77,7 +135,10 @@ void moveDown() {
         return;
     }
 
-    Serial.println("⬇️ Logic: Moving Down...");
+    if (!wasMovingDown) {
+        Serial.println("⬇️ Logic: Moving Down...");
+        wasMovingDown = true;
+    }
     digitalWrite(MOT_A_IN1, LOW); digitalWrite(MOT_A_IN2, HIGH);
     digitalWrite(MOT_B_IN3, LOW); digitalWrite(MOT_B_IN4, HIGH);
     analogWrite(MOT_A_ENA, 255);
@@ -91,8 +152,15 @@ void setup() {
     // Initialize Pins
     pinMode(BTN_UP, INPUT_PULLUP);
     pinMode(BTN_DOWN, INPUT_PULLUP);
+    pinMode(LED_RED, OUTPUT);
+    pinMode(LED_GREEN, OUTPUT);
+    pinMode(LED_BLUE, OUTPUT);
+    
     pinMode(MOT_A_IN1, OUTPUT); pinMode(MOT_A_IN2, OUTPUT); pinMode(MOT_A_ENA, OUTPUT);
     pinMode(MOT_B_IN3, OUTPUT); pinMode(MOT_B_IN4, OUTPUT); pinMode(MOT_B_ENB, OUTPUT);
+
+    // Initial LED state
+    setLED(true, false, false); // Default to RED until logic takes over
 
     // 🚩 FACTORY RESET CHECK: Hold UP + DOWN buttons for 3 seconds at boot
     if (digitalRead(BTN_UP) == LOW && digitalRead(BTN_DOWN) == LOW) {
@@ -112,6 +180,7 @@ void setup() {
 
     String ssid = getSSID();
     String pass = getPass();
+    isRegisteredCached = (ssid != ""); // 🚩 Set the cache for the LED logic
 
     authorizedCollarsCache = getAuthorizedCollarList(); 
     Serial.println("📋 Loaded Authorized Collars: " + authorizedCollarsCache);
@@ -121,6 +190,7 @@ void setup() {
     } else {
         if (connectToWiFi(ssid, pass)) {
             initNetwork(); // Setup MQTT and HTTP Sync
+            requestCollarSync(); // 🚩 Sync registered collars from backend
             
             // --- Create Core 0 Task ---
             // This offloads the heavy BLE scanning to the other CPU core.
@@ -144,8 +214,17 @@ void setup() {
 // ... (Keep includes and definitions the same)
 
 void loop() {
+    updateLEDState();
+    updateDoorAutomation(); // 🚩 RUN STATE MACHINE (Core 1) - Ensures 10s logic works even if not registered
     if (client.connected()) client.loop();
     checkIRActivity();
+
+    // 🚩 Periodic Battery Check (Every hour)
+    static unsigned long lastBatteryCheck = 0;
+    if (millis() - lastBatteryCheck > 3600000) {
+        lastBatteryCheck = millis();
+        reportBatteryHealth();
+    }
 
     bool btnUp = (digitalRead(BTN_UP) == LOW);
     bool btnDown = (digitalRead(BTN_DOWN) == LOW);
@@ -168,26 +247,23 @@ void loop() {
     }
 
     // 2. Individual Manual Button Reading
-    if (btnUp || btnDown) {
-        manualActionInProgress = true; 
-        isMoving = true; 
+    if ((btnUp || btnDown) && !isMoving) {
         if (btnUp) {
-            moveUp();
+            handleRemoteCommand("OPEN");
             handleManualActivityLog("MANUAL_UP");
         }
         else if (btnDown) {
-            moveDown();
+            handleRemoteCommand("CLOSED");
             handleManualActivityLog("MANUAL_DOWN");
         }
+        // Small debounce delay
+        delay(200);
         return;
     }
 
-    // 3. Idle Logic (Manual Override Handling)
+    // 3. Idle Logic (Manual Override Handling) - No longer needed for stopMotors() as state machine handles it
     if (!btnUp && !btnDown) {
-        if (manualActionInProgress) {
-            Serial.println("🛑 Manual Button Released: Stopping Motors.");
-            stopMotors();
-            isMoving = false;
+        if (manualActionInProgress && !isMoving) {
             manualActionInProgress = false;
         }
     }

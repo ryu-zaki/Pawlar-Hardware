@@ -14,6 +14,11 @@
 #define BTN_UP 18
 #define BTN_DOWN 19
 
+// --- 💡 RGB LED PINS ---
+#define LED_RED   5
+#define LED_GREEN 17
+#define LED_BLUE  23
+
 // --- 👁️ SENSOR PINS ---
 #define IR_INSIDE_PIN  13
 #define IR_OUTSIDE_PIN 16 
@@ -27,13 +32,20 @@
 #define MQTT_USER        "pawlar_mqtt"
 #define MQTT_PASSWORD    "Pawlar123"
 
+// --- 🌐 BACKEND CONFIG ---
+#define BACKEND_URL      "http://192.168.0.106:3000/esp32/"
+
 // --- 🔵 SHARED BLE UUIDS ---
-#define SERVICE_UUID           "172f3570-5645-4290-9519-046c64d85147"
+#define SERVICE_UUID           "172f3570-5645-4290-9519-046c64d85148"
 #define CHAR_CREDENTIALS_UUID  "2388432a-360e-4363-8025-055171736417"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
 // --- 📧 MQTT TOPICS ---
-#define TOPIC_DOOR_LOGS  "pawlar/door/logs"     
-#define TOPIC_COMMANDS   "pawlar/collar/commands"
+#define TOPIC_DOOR_STATUS    "pawlar/door/status"
+#define TOPIC_DOOR_LOGS      "pawlar/door/logs"     
+#define TOPIC_COMMANDS       "pawlar/collar/commands"
+#define TOPIC_DOOR_CONTROLS  "pawlar/door/controls"
+#define TOPIC_NOTIFICATIONS  "pawlar/door/notifications"
+#define TOPIC_BATTERY        "pawlar/door/battery"
 
 #endif

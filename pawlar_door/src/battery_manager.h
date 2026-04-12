@@ -5,5 +5,6 @@
 
 void initBatteryMonitor();
 void reportBatteryHealth();
+bool isBatteryLow();
 
 #endif

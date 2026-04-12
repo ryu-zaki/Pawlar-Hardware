@@ -15,5 +15,6 @@ String getUniqueDoorID();
 
 void saveAuthorizedCollar(String collarList);
 String getAuthorizedCollarList();
-
+bool isNewlyRegistered();
+void setNewlyRegistered(bool b);
 #endif

@@ -1,21 +1,26 @@
 #include "gps_manager.h"
 #include "config.h"
 #include <TinyGPSPlus.h>
+#include <SoftwareSerial.h>
 
 TinyGPSPlus gps;
-// ESP32-C3 only has Serial 0 (USB) and Serial 1. HardwareSerial(2) will crash.
-HardwareSerial gpsSerial(1); 
+// Use SoftwareSerial for Pins 3 and 2 to avoid UART0 conflict
+HardwareSerial gpsSerial(0);
 
 void initGPS() { 
-    // RX=Pin 3, TX=Pin 2 as per your config.h
-    gpsSerial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN); 
-    Serial.println("🛰️ GPS Serial 1 started on Pins 3(RX) and 2(TX)");
+    gpsSerial.begin(9600, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    Serial.printf("🛰️ GPS Initialized on Pins %d(RX), %d(TX) using Hardware UART0.\n", GPS_RX_PIN, GPS_TX_PIN);
 }
 
 void readGPS() { 
     while (gpsSerial.available() > 0) {
         gps.encode(gpsSerial.read()); 
     }
+}
+
+// Add this to check if the library is actually receiving data
+bool isGpsCommuncating() {
+    return gps.charsProcessed() > 0;
 }
 
 bool hasFix() { 

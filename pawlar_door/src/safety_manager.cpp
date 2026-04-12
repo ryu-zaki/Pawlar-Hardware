@@ -1,5 +1,6 @@
 #include "safety_manager.h"
 #include "network_manager.h"
+#include "proximity_manager.h"
 #include "config.h"
 
 bool petHasPassed = false; // ADDED: Definition for the global flag
@@ -63,6 +64,7 @@ void checkIRActivity() {
                 if (bothSensorsBlocked) {
                     Serial.println("✅ SUCCESS: PET FULLY ENTERED");
                     publishDoorActivity("PET_GOING_IN", 0.0);
+                    publishNotification("Pet Went Inside", "detected moving inside the house.", "INFO", lastSeenCollarId);
                     petHasPassed = true; // Signal that the pet has passed
                 }
                 currentPath = IDLE;
@@ -79,6 +81,7 @@ void checkIRActivity() {
                 if (bothSensorsBlocked) {
                     Serial.println("✅ SUCCESS: PET FULLY EXITED");
                     publishDoorActivity("PET_GOING_OUT", 0.0);
+                    publishNotification("Pet Went Outside", "detected moving outside the house.", "INFO", lastSeenCollarId);
                     petHasPassed = true; // Signal that the pet has passed
                 }
                 currentPath = IDLE;
